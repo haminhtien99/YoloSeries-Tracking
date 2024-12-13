@@ -4,6 +4,7 @@
 import os
 from tqdm import tqdm
 import cv2
+import shutil
 DATA_PATH = '/home/ha/Downloads/Dataset/VisDrone-DET'
 SPLITS = ['VisDrone2019-DET-train',
           'VisDrone2019-DET-val',
@@ -22,6 +23,9 @@ id2cls_visdrone = {0: 'pedestrian',
 for split in SPLITS:
     data_path = os.path.join(DATA_PATH, split)
     output_path = os.path.join(DATA_PATH, split, 'labels')
+    if os.path.exists(output_path):
+        shutil.rmtree(output_path)
+    os.makedirs(output_path)
     img_dir = os.path.join(data_path, 'images')
     imgs = sorted(os.listdir(img_dir))
     if not os.path.exists(output_path):
@@ -47,13 +51,14 @@ for split in SPLITS:
                         id = 1
                     elif cls == 'bus':
                         id = 2
+                    elif cls == 'van':
+                        id = 3
                     else:
-                        id = -1
-                    if id != -1:
-                        x1, y1, w, h = map(float, data[:4])
-                        x_center = (x1 + w/2) / width
-                        y_center = (y1 + h/2) / height
-                        w /= width
-                        h /= height
-                        with open(yolo_path, 'a+', encoding='utf8') as output_file:
-                            output_file.write(f'{id} {x_center} {y_center} {w} {h}\n')
+                        continue
+                    x1, y1, w, h = map(float, data[:4])
+                    x_center = (x1 + w/2) / width
+                    y_center = (y1 + h/2) / height
+                    w /= width
+                    h /= height
+                    with open(yolo_path, 'a+', encoding='utf8') as output_file:
+                        output_file.write(f'{id} {x_center} {y_center} {w} {h}\n')
