@@ -59,7 +59,7 @@ def track_per_model(model_name:str,
                                             'trackers',
                                             benchmark,
                                             f'{benchmark}-{spl}',
-                                            f'{track_name}-{sub_path}-{model_name}',
+                                            f'{track_name}-{model_name}-train-{sub_path}',
                                             'data')
             if not os.path.exists(full_output_path):
                 os.makedirs(full_output_path)
