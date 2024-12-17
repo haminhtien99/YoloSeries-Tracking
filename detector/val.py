@@ -33,7 +33,8 @@ def main(args):
     abs_path_runner = os.path.abspath(__file__)
     abs_path_root = os.path.dirname(abs_path_runner)
     results_list = []
-    project = os.path.join(abs_path_root, args.project, 'train-' + args.sub_path)
+    val_data = args.data.split('/')[-1].split('.')[0]
+    project = os.path.join(abs_path_root, args.project, 'train-' + args.sub_path, 'val-'+ val_data)
     if not os.path.exists(project):
         os.makedirs(project)
         print(f'Validation folder {project} created')
@@ -79,7 +80,7 @@ if __name__ == '__main__':
     parser.add_argument('--all-weights', action='store_true', help='Track using all weights')
     parser.add_argument('--model-name', type=str, default=None,
                         help='Specific weight to use if all_weights is False')
-    parser.add_argument('--data', type=str, default='data-config/uavdt.yaml', help='')
+    parser.add_argument('--data', type=str, default='data-config/uavdt.yaml', help='path to .yaml data')
     parser.add_argument('--batch', type=int, default=-1, help='')
     parser.add_argument('--imgsz', type=int, default=320, help='')
     parser.add_argument('--device', type=str, default='cpu',

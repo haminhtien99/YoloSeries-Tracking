@@ -11,7 +11,9 @@ def track_per_model(model_name:str,
                     splits: str|list[str],
                     imgsz: int,
                     device: str|int|list[int],
-                    batch: int) -> None:
+                    batch: int,
+                    save_img: bool = False,
+                    track_folder: str|str = None)-> None:
     """ tracking per model """
     abs_path_runner = os.path.abspath(__file__)
     abs_path_root = os.path.dirname(abs_path_runner)
@@ -46,12 +48,16 @@ def track_per_model(model_name:str,
                     conf = box.conf.item()
                     line = f'{frame_id+1},{track_id},{bbox[0]},{bbox[1]},{bbox[2]-bbox[0]},{bbox[3]-bbox[1]},{conf},-1,-1,-1\n'
                     lines.append(line)
-                # if save_img_with_id:
-                #     # Plot results image
-                #     im_bgr = result.plot()  # BGR-order numpy array
-                #     im_rgb = Image.fromarray(im_bgr[..., ::-1])  # RGB-order PIL image
-                #     # Save results to disk
-                #     result.save(filename=f"/home/ha/projects/YoloSeries-Tracking/track_results/results{frame_id}.jpg")
+                if save_img:
+                    # Plot results image
+                    im_bgr = result.plot()  # BGR-order numpy array
+                    im_rgb = Image.fromarray(im_bgr[..., ::-1])  # RGB-order PIL image
+                    # Save results to disk
+                    track_res_path = os.path.join(abs_path_root, track_folder)
+                    if not os.path.exists(track_res_path):
+                        os.makedirs(track_res_path)    
+                    result_img = os.path.join(track_res_path, f'{frame_id}.jpg')
+                    result.save(filename=result_img)
             sub_path = model_path.split('/')[-4]
             full_output_path = os.path.join(abs_path_root,
                                             'TrackEval',
@@ -84,7 +90,9 @@ def main(args):
                             splits=args.splits,
                             imgsz=args.imgsz,
                             device=args.device,
-                            batch=args.batch)
+                            batch=args.batch,
+                            save_img=args.save_img,
+                            track_folder=args.track_folder)
     else:
         model_path = os.path.join(args.detectors_path,
                                   args.sub_path, args.sub_path,
@@ -96,7 +104,9 @@ def main(args):
                         splits=args.splits,
                         imgsz=args.imgsz,
                         device=args.device,
-                        batch=args.batch)
+                        batch=args.batch,
+                        save_img=args.save_img,
+                        track_folder=args.track_folder)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser("ultralytics YOLO track parser")
@@ -117,6 +127,10 @@ if __name__ == '__main__':
     parser.add_argument('--imgsz', type=int, default=320, help='')
     parser.add_argument('--device', type=str, default='cpu',
                         help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
+    parser.add_argument('--save-img', action='store_true',
+                        help='save results image with track id')
+    parser.add_argument('--track-folder', type=str, default=None,
+                        help='path to save track results if save_img is True')
 
     args = parser.parse_args()
     print(f'track type: {args.track_type}')
@@ -130,4 +144,6 @@ if __name__ == '__main__':
     print(f"Image size: {args.imgsz}")
     print(f"Device: {args.device}")
     print(f'batch size: {args.batch}')
+    if args.save_img:
+        print(f"Save image with track id into: {args.track_folder}")
     main(args)

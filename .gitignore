@@ -1,1 +1,14 @@
 .virtenv/
+data-config/
+pretrained_weights/
+tools/make_UAVDT_with_ignore.py
+tools/create_UAVDT.py
+track_results
+val_results
+
+#TrackEval repository
+TrackEval/data/trackers
+TrackEval/data/gt/UAVDT/UAVDT-train
+TrackEval/data/gt/VisDrone/VisDrone-train
+TrackEval/error_log.txt
+TrackEval/data/make_data.py
