@@ -34,7 +34,7 @@ def main(args):
     abs_path_root = os.path.dirname(abs_path_runner)
     results_list = []
     val_data = args.data.split('/')[-1].split('.')[0]
-    project = os.path.join(abs_path_root, args.project, 'train-' + args.sub_path, 'val-'+ val_data)
+    project = os.path.join(abs_path_root, args.project, 'val-'+ val_data, 'train-' + args.sub_path)
     if not os.path.exists(project):
         os.makedirs(project)
         print(f'Validation folder {project} created')
