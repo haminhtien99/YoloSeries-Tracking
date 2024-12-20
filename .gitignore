@@ -4,10 +4,11 @@ pretrained_weights/
 tools/make_UAVDT_with_ignore.py
 tools/create_UAVDT.py
 track_results
-val_results
 
+tests
 #TrackEval repository
-TrackEval/data/trackers
+TrackEval/data/trackers/UAVDT/UAVDT-train
+TrackEval/data/trackers/VisDrone/VisDrone-train
 TrackEval/data/gt/UAVDT/UAVDT-train
 TrackEval/data/gt/VisDrone/VisDrone-train
 TrackEval/error_log.txt
