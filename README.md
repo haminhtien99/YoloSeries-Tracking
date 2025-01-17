@@ -10,8 +10,9 @@ This repository contains the code for the YOLO detectors and the Multi-object tr
 and the tracker supports:
 - ByteTrack
 - BoT-SORT
+- SORT (added by me)
 
-I used the [ultralytics](https://github.com/ultralytics/ultralytics) and [TrackEval](https://github.com/JonathonLuiten/TrackEval) repositories to do this project. Code can be customized for use on other datasets. 
+I used the [ultralytics](https://github.com/ultralytics/ultralytics), [SORT](https://github.com/abewley/sort) and [TrackEval](https://github.com/JonathonLuiten/TrackEval) repositories to do this project. Code can be customized for use on other datasets. 
 
 ## Installation
 
@@ -19,9 +20,11 @@ python is available
 
 pytorch is available
 ```
-!git clone https://github.com/haminhtien99/YoloSeries-Tracking/tree/master/TrackEval/data # Clone my repository
-pip install ultralytics
-
+git clone https://github.com/haminhtien99/YoloSeries-Tracking
+```
+Go to cloned folder
+```
+cd YoloSeries-Tracking
 ```
 ## Dataset preparation
 ### Dataset-DET
@@ -105,11 +108,11 @@ I focused on comparing on the object of transportation. So I made some changes c
 ## Detector
 ### Train
 ```
-python train.py --model-weight name_model.pt --data path/to/file.yaml --epochs 100 --batch 8 --device 0 --project path/to/project_name --name name_folder --imgsz 640
+python detector/train.py --model-weight name_model.pt --data path/to/file.yaml --epochs 100 --batch 8 --device 0 --project path/to/project_name --name name_folder --imgsz 640
 ```
 Example
 ```
-python train.py --model-weight yolov8l.pt --data config/visdrone.yaml --epochs 100 --batch 8 --device 0 --project visdrone --name yolov8l --imgsz 640
+python detector/train.py --model-weight yolov8l.pt --data config/visdrone.yaml --epochs 100 --batch 8 --device 0 --project visdrone --name yolov8l --imgsz 640
 ```
 
 ### Validate
@@ -133,26 +136,33 @@ python track.py --mot-path path/to/mot_dataset --splits which_part_use_to_track 
 ```
 Example
 ```
-python track.py --mot-path /content/UAVDT-2024-MOT --splits train --track-type bytetrack.yaml --detectors-path /content/yolo-detectors --sub-path uavdt --yolo-name yolov8l --device 0 -batch 1
+python track.py --mot-path UAVDT-2024-MOT --splits train --track-type bytetrack.yaml --detectors-path yolo-detectors --sub-path uavdt --yolo-name yolov8l --device 0 -batch 1
 ```
 You can save images with IDs by running the following command
 ```
-python track.py --mot-path /content/UAVDT-2024-MOT --splits train --track-type bytetrack.yaml --detectors-path /content/yolo-detectors --sub-path uavdt --yolo-name yolov8l --device 0 -batch 1 --save-img --track-foler track_results
+python track.py --mot-path UAVDT-2024-MOT --splits train --track-type bytetrack.yaml --detectors-path yolo-detectors --sub-path uavdt --yolo-name yolov8l --device 0 -batch 1 --save-img --track-foler track_results
 ```
 
 ### Evaluation tracking
-Before validating tracker, you need to run the following command to copy the ground truth folder of MOT-dataset to `TrackEval/data/gt`
+Before evaluate tracker, you need to run the following command to copy the ground truth folder of MOT-dataset to `results/data/gt`
 ```
-python TrackEval/data/copy_data_to_TrackEval.py --BENCHMARK name_mot_dataset --mot_path path/to/mot_dataset
+python trackeval/prepare_gt_trackeval.py --BENCHMARK name_mot_dataset --mot_path path/to/mot_dataset
 ```
 
 Example
 ```
-python TrackEval/data/copy_data_to_TrackEval.py --BENCHMARK UAVDT --mot_path /content/UAVDT-2024-MOT
+python trackeval/prepare_gt_trackeval.py --BENCHMARK UAVDT --mot_path UAVDT-2024-MOT
 ```
 
-Run validation
+Run eval
 ```
-python TrackEval/scripts/run_mot_challenge.py --BENCHMARK name_mot_dataset --TRACKERS_TO_EVAL name_tracker --SPLIT_TO_EVAL train --METRICS HOTA CLEAR Identity
+python eval.py --BENCHMARK name_mot_dataset --TRACKERS_TO_EVAL name_tracker --SPLIT_TO_EVAL val --METRICS HOTA CLEAR Identity
 ```
-Read more about TrackEval [here](https://github.com/JonathonLuiten/TrackEval)
+
+## References
+https://github.com/ultralytics/ultralytics
+
+https://github.com/JonathonLuiten/TrackEval
+
+https://github.com/abewley/sort
+
