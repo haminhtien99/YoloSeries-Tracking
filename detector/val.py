@@ -1,4 +1,4 @@
-from ultralytics import YOLO
+from ultralytics.models import YOLO
 import argparse
 import os
 from tqdm import tqdm
