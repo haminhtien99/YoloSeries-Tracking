@@ -12,7 +12,7 @@ and the tracker supports:
 - BoT-SORT
 - SORT (added by me)
 
-I used the [ultralytics](https://github.com/ultralytics/ultralytics), [SORT](https://github.com/abewley/sort) and [TrackEval](https://github.com/JonathonLuiten/TrackEval) repositories to do this project. Code can be customized for use on other datasets. 
+I used the [ultralytics](https://github.com/ultralytics/ultralytics), [SORT](https://github.com/abewley/sort) and [TrackEval](https://github.com/JonathonLuiten/TrackEval) repositories to do this project. Code can be customized for use on other datasets.
 
 ## Installation
 
