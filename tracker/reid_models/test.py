@@ -2,8 +2,8 @@ import os
 import torch
 import torch.backends.cudnn as cudnn
 import argparse
-from .model import Net
-from .utils import test_loader
+from model import Net
+from utils import test_loader
 
 def evaluate(features):
     qf = features['qf']
@@ -17,7 +17,7 @@ def evaluate(features):
 
 def parser_args():
     parser = argparse.ArgumentParser(description='Train on VeRi')
-    parser.add_argument('--datadir', default='', type=str)
+    parser.add_argument('--datadir', default='/home/ha/Downloads/Dataset/VeRi/pytorch', type=str)
     parser.add_argument("--no-cuda",action="store_true")
     parser.add_argument("--gpu-id",default=0,type=int)
     args = parser.parse_args()
@@ -34,10 +34,12 @@ def main(args):
     galleryloader = test_loader(gallery_dir)
 
     # load model
+    parrent_path = os.path.dirname(os.path.abspath(__file__))
+    model_path = os.path.join(parrent_path, 'checkpoint', 'ckpt.pth')
     net = Net(reid=True)
-    assert os.path.isfile('checkpoint/ckpt.pth'), 'Checkpoint not found'
+    assert os.path.isfile(model_path), 'Checkpoint not found'
     print('Load checkpoint')
-    checkpoint = torch.load('checkpoint/ckpt.pth')
+    checkpoint = torch.load(model_path)
     net.load_state_dict(checkpoint['net_dict'], strict=False)
     net.eval()
     net.to(device)

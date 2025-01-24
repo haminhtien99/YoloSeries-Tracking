@@ -2,6 +2,9 @@ import os
 import matplotlib.pyplot as plt
 import torchvision
 import torch
+
+IMAGE_HEIGHT, IMAGE_WIDTH = 130, 130 # image shape for VeRi dataset
+
 def plot_results(outpath: str):
     # load results
     txt = os.path.join(outpath, 'train.txt')
@@ -33,12 +36,13 @@ def plot_results(outpath: str):
 
 def train_loader(train_path: str):
     transform = torchvision.transforms.Compose([
-        torchvision.transforms.Resize((128, 64), padding=4),
+        torchvision.transforms.Resize((IMAGE_HEIGHT, IMAGE_WIDTH)),
+        torchvision.transforms.RandomCrop((IMAGE_HEIGHT, IMAGE_WIDTH), padding=4),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.RandomHorizontalFlip(),
         torchvision.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
-    dataloader = torch.utils.DataLoader(
+    dataloader = torch.utils.data.DataLoader(
         torchvision.datasets.ImageFolder(train_path, transform=transform),
         batch_size=64,
         shuffle=False
@@ -47,11 +51,11 @@ def train_loader(train_path: str):
 
 def test_loader(test_path: str):
     transform = torchvision.transforms.Compose([
-        torchvision.transforms.Resize((128, 64)),
+        torchvision.transforms.Resize((IMAGE_HEIGHT, IMAGE_WIDTH)),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
-    dataloader = torch.utils.DataLoader(
+    dataloader = torch.utils.data.DataLoader(
         torchvision.datasets.ImageFolder(test_path, transform=transform),
         batch_size=64,
         shuffle=False

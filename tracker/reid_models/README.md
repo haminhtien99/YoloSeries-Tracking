@@ -43,3 +43,5 @@ Run `test.py`
 https://github.com/JDAI-CV/VeRidataset
 
 https://github.com/layumi/Person_reID_baseline_pytorch
+
+https://github.com/TongJiL/Vehicle-Re-identification-on-VeRi-dataset

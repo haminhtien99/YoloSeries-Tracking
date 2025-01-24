@@ -11,7 +11,7 @@ from model import Net
 from utils import plot_results, train_loader, test_loader
 
 parser = argparse.ArgumentParser(description="Train on market1501")
-parser.add_argument("--data-dir",default='/home/ha/Downloads/Dataset/market-1501/Market-1501-v15.09.15/pytorch',type=str)
+parser.add_argument("--data-dir",default='/home/ha/Downloads/Dataset/VeRi/pytorch',type=str)
 parser.add_argument("--no-cuda",action="store_true")
 parser.add_argument("--gpu-id",default=0,type=int)
 parser.add_argument("--lr0",default=0.1, type=float)
