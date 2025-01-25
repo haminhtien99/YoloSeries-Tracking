@@ -26,7 +26,7 @@ def main(args):
     device = 'cuda:{}'.format(args.gpu_id) if torch.cuda.is_available() and not args.no_cuda else 'cpu'
     if torch.cuda.is_available() and not args.no_cuda:
         cudnn.benchmark = True
-    
+
     datadir = args.datadir
     query_dir = os.path.join(datadir, 'query')
     gallery_dir = os.path.join(datadir, 'gallery')

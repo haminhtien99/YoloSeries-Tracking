@@ -49,6 +49,11 @@ def make_layers(c_in, c_out, repeat_times, is_downsample=False):
 
 
 class Net(nn.Module):
+    @property
+    def device(self):
+        for p in self.parameters():
+            return p.device
+
     def __init__(self, num_classes=751, reid=False):
         super(Net, self).__init__()
         # 3 128 64

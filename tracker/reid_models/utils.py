@@ -2,9 +2,9 @@ import os
 import matplotlib.pyplot as plt
 import torchvision
 import torch
-
+from typing import Iterable
 IMAGE_HEIGHT, IMAGE_WIDTH = 130, 130 # image shape for VeRi dataset
-
+# IMAGE_HEIGHT, IMAGE_WIDTH = 128, 64 # image shape for Market15.01 dataset
 def plot_results(outpath: str):
     # load results
     txt = os.path.join(outpath, 'train.txt')
@@ -34,7 +34,7 @@ def plot_results(outpath: str):
     ax1.legend()
     fig.savefig(res_jpg)
 
-def train_loader(train_path: str):
+def train_loader(train_path: str, batch_size=64):
     transform = torchvision.transforms.Compose([
         torchvision.transforms.Resize((IMAGE_HEIGHT, IMAGE_WIDTH)),
         torchvision.transforms.RandomCrop((IMAGE_HEIGHT, IMAGE_WIDTH), padding=4),
@@ -44,12 +44,12 @@ def train_loader(train_path: str):
     ])
     dataloader = torch.utils.data.DataLoader(
         torchvision.datasets.ImageFolder(train_path, transform=transform),
-        batch_size=64,
+        batch_size=batch_size,
         shuffle=False
     )
     return dataloader
 
-def test_loader(test_path: str):
+def test_loader(test_path: str, batch_size=64):
     transform = torchvision.transforms.Compose([
         torchvision.transforms.Resize((IMAGE_HEIGHT, IMAGE_WIDTH)),
         torchvision.transforms.ToTensor(),
@@ -57,7 +57,7 @@ def test_loader(test_path: str):
     ])
     dataloader = torch.utils.data.DataLoader(
         torchvision.datasets.ImageFolder(test_path, transform=transform),
-        batch_size=64,
+        batch_size=batch_size,
         shuffle=False
     )
     return dataloader

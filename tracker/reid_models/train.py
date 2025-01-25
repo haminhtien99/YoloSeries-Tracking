@@ -10,29 +10,18 @@ from tqdm import tqdm
 from model import Net
 from utils import plot_results, train_loader, test_loader
 
-parser = argparse.ArgumentParser(description="Train on market1501")
-parser.add_argument("--data-dir",default='/home/ha/Downloads/Dataset/VeRi/pytorch',type=str)
-parser.add_argument("--no-cuda",action="store_true")
-parser.add_argument("--gpu-id",default=0,type=int)
-parser.add_argument("--lr0",default=0.1, type=float)
-parser.add_argument('--resume', '-r',action='store_true')
-parser.add_argument("--epochs", default=3, type=int)
-args = parser.parse_args()
-
-# device
-device = "cuda:{}".format(args.gpu_id) if torch.cuda.is_available() and not args.no_cuda else "cpu"
-if torch.cuda.is_available() and not args.no_cuda:
-    cudnn.benchmark = True
-
 # train
 def train_on_batch(model: Net, x_batch, y_batch, optimizer, loss_function):
+    device = model.device
+    x_batch, y_batch = x_batch.to(device), y_batch.to(device)
+
     model.train()
     optimizer.zero_grad()
 
-    output = model(x_batch.to(device))
+    output = model(x_batch)
 
     correct = output.max(dim=1)[1].eq(y_batch).sum().item()
-    loss = loss_function(output, y_batch.to(device))
+    loss = loss_function(output, y_batch)
     loss.backward()
 
     optimizer.step()
@@ -59,6 +48,7 @@ def train_on_epoch(train_generator, optimizer, loss_function, model, epoch):
 # test during training
 def test(loss_function, test_generator, model):
     model.eval()
+    device = model.device
     test_loss = 0.
     acc = 0
     total = 0
@@ -147,14 +137,31 @@ def trainer(model,
                 print(f'Decay LR to {param_group["lr"]:.6f}')
     plot_results(checkpoint_path)
 
+def parser_args():
+    parser = argparse.ArgumentParser(description="Train on market1501")
+    parser.add_argument("--data-dir",default='/home/ha/Downloads/Dataset/VeRi/pytorch',type=str)
+    parser.add_argument("--no-cuda",action="store_true")
+    parser.add_argument("--gpu-id",default=0,type=int)
+    parser.add_argument("--lr0",default=0.1, type=float)
+    parser.add_argument('--resume', '-r',action='store_true')
+    parser.add_argument("--epochs", default=3, type=int)
+    args = parser.parse_args()
+    return args
+
 def main():
+    args = parser_args()
     datapath = args.data_dir
     # dataloader
     train_dir = os.path.join(datapath,"train")
     test_dir = os.path.join(datapath,"val")
-    trainloader = train_loader(train_dir)
-    testloader = test_loader(test_dir)
+    trainloader = train_loader(train_dir, batch_size=64)
+    testloader = test_loader(test_dir, batch_size=128)
     num_classes = len(trainloader.dataset.classes)
+
+    # device
+    device = "cuda:{}".format(args.gpu_id) if torch.cuda.is_available() and not args.no_cuda else "cpu"
+    if torch.cuda.is_available() and not args.no_cuda:
+        cudnn.benchmark = True
 
     # net definition
     net = Net(num_classes=num_classes)
