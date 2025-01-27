@@ -18,13 +18,15 @@ def train_on_batch(model: Net, x_batch, y_batch, optimizer, loss_function):
     model.train()
     optimizer.zero_grad()
 
+    # forward
     output = model(x_batch)
-
     correct = output.max(dim=1)[1].eq(y_batch).sum().item()
     loss = loss_function(output, y_batch)
-    loss.backward()
 
+    # backward
+    loss.backward()
     optimizer.step()
+
     return loss.cpu().item(), correct
 
 def train_on_epoch(train_generator, optimizer, loss_function, model, epoch):
@@ -68,12 +70,11 @@ def trainer(model,
             number_of_epoch,
             train_generator,
             test_generator,
-            loss_funtion,
-            optim,
-            lr0 = 0.1,
+            loss_function,
+            optimizer,
+            scheduler,
             resume = False):
     best_acc = 0.
-    optimizer = optim(model.parameters(), momentum=0.9, weight_decay=5e-4, lr=lr0)
     start_epoch = 0
     parrent_path = os.path.dirname(os.path.abspath(__file__))
     checkpoint_path = os.path.join(parrent_path, 'checkpoint')
@@ -86,31 +87,32 @@ def trainer(model,
             print(f'Loading checkpoint from {full_path}')
             checkpoint = torch.load(full_path)
             model.load_state_dict(checkpoint['net_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer'])
             start_epoch = checkpoint['epoch']
             best_acc = checkpoint['acc']
         else:
             print("Not checkpoint")
             return
     else: # create checkpoint/train.txt
-        with open(os.path.join(checkpoint_path, 'train.txt'), 'a') as f:
+        with open(os.path.join(checkpoint_path, 'train.txt'), 'w') as f:
             line = 'epoch,train_loss,test_loss,train_err,test_err\n'
             f.write(line)
 
     iterations = tqdm(range(start_epoch, number_of_epoch + start_epoch), desc='Training')
-    iterations.set_postfix({'epoch loss': np.nan, 'epoch acc': np.nan})
+    current_lr = scheduler.get_last_lr()[0]
+    iterations.set_postfix({'epoch loss': np.nan, 'epoch acc': np.nan, 'lr ': current_lr})
     for epoch in iterations:
         train_loss, train_acc = train_on_epoch(train_generator=train_generator,
                                                optimizer=optimizer,
-                                               loss_function=loss_funtion,
+                                               loss_function=loss_function,
                                                model=model,
                                                epoch=epoch+1)
-        iterations.set_postfix({'epoch loss': train_loss, 'epoch acc': train_acc})
+        scheduler.step()
+        current_lr = scheduler.get_last_lr()[0]
+        iterations.set_postfix({'epoch loss': train_loss, 'epoch acc': train_acc, 'lr ': current_lr})
         # test
-        print("Testing ...")
-        test_loss, test_acc = test(loss_function=loss_funtion,
-                                              test_generator=test_generator,
-                                              model=model)
+        test_loss, test_acc = test(loss_function=loss_function,
+                                   test_generator=test_generator,
+                                   model=model)
         print(f'Epoch{epoch+1}: test loss:{test_loss: .3f}, test_acc:{test_acc: .3f}')
         # saving checkpoint
         if test_acc > best_acc:
@@ -121,8 +123,6 @@ def trainer(model,
                 'acc':test_acc,
                 'epoch':epoch,
             }
-            if not os.path.isdir(checkpoint_path):
-                os.mkdir(checkpoint_path)
             torch.save(checkpoint, full_path)
 
         # save result training
@@ -130,11 +130,6 @@ def trainer(model,
             line = f'{epoch + 1},{train_loss},{test_loss},{1. - train_acc},{1. - test_acc}\n'
             f.write(line)
 
-        # learning rate decay
-        if (epoch + 1) % 20 == 0:
-            for param_group in optimizer.param_groups:
-                param_group['lr'] *= 0.1
-                print(f'Decay LR to {param_group["lr"]:.6f}')
     plot_results(checkpoint_path)
 
 def parser_args():
@@ -159,7 +154,8 @@ def main():
     num_classes = len(trainloader.dataset.classes)
 
     # device
-    device = "cuda:{}".format(args.gpu_id) if torch.cuda.is_available() and not args.no_cuda else "cpu"
+    device = "cuda:{}".format(args.gpu_id) if torch.cuda.is_available() and not args.no_cuda \
+        else "cpu"
     if torch.cuda.is_available() and not args.no_cuda:
         cudnn.benchmark = True
 
@@ -167,16 +163,18 @@ def main():
     net = Net(num_classes=num_classes)
     net.to(device)
 
-    # loss and optimizer
+    # loss, optimizer and scheduler
     loss_function = torch.nn.CrossEntropyLoss()
-    optim = torch.optim.SGD
+    optimizer = torch.optim.SGD(net.parameters(), lr=args.lr0, momentum=0.9, weight_decay=5e-4)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+
     trainer(number_of_epoch=args.epochs,
             train_generator=trainloader,
             test_generator=testloader,
             model=net,
-            loss_funtion=loss_function,
-            optim=optim,
-            lr0=args.lr0)
+            loss_function=loss_function,
+            optimizer=optimizer,
+            scheduler=scheduler)
 
 if __name__ == '__main__':
     main()

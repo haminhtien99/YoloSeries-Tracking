@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 import torchvision
 import torch
 from typing import Iterable
-IMAGE_HEIGHT, IMAGE_WIDTH = 130, 130 # image shape for VeRi dataset
-# IMAGE_HEIGHT, IMAGE_WIDTH = 128, 64 # image shape for Market15.01 dataset
+# IMAGE_HEIGHT, IMAGE_WIDTH = 130, 130 # image shape for VeRi dataset
+IMAGE_HEIGHT, IMAGE_WIDTH = 128, 64 # image shape for Market15.01 dataset
 def plot_results(outpath: str):
     # load results
     txt = os.path.join(outpath, 'train.txt')
@@ -13,7 +13,7 @@ def plot_results(outpath: str):
     epochs, train_loss, test_loss, train_err, test_err = [], [], [], [], []
     with open(txt, 'r') as f:
         lines = f.readlines()
-        for line in lines:
+        for line in lines[1:]:
             line = line.strip().split(',')
             epochs.append(int(line[0]))
             train_loss.append(float(line[1]))
@@ -38,14 +38,14 @@ def train_loader(train_path: str, batch_size=64):
     transform = torchvision.transforms.Compose([
         torchvision.transforms.Resize((IMAGE_HEIGHT, IMAGE_WIDTH)),
         torchvision.transforms.RandomCrop((IMAGE_HEIGHT, IMAGE_WIDTH), padding=4),
-        torchvision.transforms.ToTensor(),
         torchvision.transforms.RandomHorizontalFlip(),
+        torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
     dataloader = torch.utils.data.DataLoader(
         torchvision.datasets.ImageFolder(train_path, transform=transform),
         batch_size=batch_size,
-        shuffle=False
+        shuffle=True
     )
     return dataloader
 
@@ -58,6 +58,6 @@ def test_loader(test_path: str, batch_size=64):
     dataloader = torch.utils.data.DataLoader(
         torchvision.datasets.ImageFolder(test_path, transform=transform),
         batch_size=batch_size,
-        shuffle=False
+        shuffle=True
     )
     return dataloader
