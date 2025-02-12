@@ -3,15 +3,16 @@ import os
 
 import numpy as np
 import torch
+import torchvision
 import torch.backends.cudnn as cudnn
 from tqdm import tqdm
 
-
 from model import Net
-from utils import plot_results, train_loader, test_loader
+from utils.datatransform import custom_transform
+from utils.plot import plot_results
 
 # train
-def train_on_batch(model: Net, x_batch, y_batch, optimizer, loss_function):
+def train_on_batch(model, x_batch, y_batch, optimizer, loss_function):
     device = model.device
     x_batch, y_batch = x_batch.to(device), y_batch.to(device)
 
@@ -29,11 +30,11 @@ def train_on_batch(model: Net, x_batch, y_batch, optimizer, loss_function):
 
     return loss.cpu().item(), correct
 
-def train_on_epoch(train_generator, optimizer, loss_function, model, epoch):
+def train_on_epoch(train_generator, optimizer, loss_function, model):
     epoch_loss = 0.
     total = 0
     acc = 0.
-    iterations = tqdm(train_generator, desc=f'Epoch {epoch}')
+    iterations = tqdm(train_generator, desc='Training per epoch')
     iterations.set_postfix({'batch loss': np.nan})
     for (x_batch, y_batch) in iterations:
         batch_loss, corr = train_on_batch(model=model,
@@ -73,19 +74,19 @@ def trainer(model,
             loss_function,
             optimizer,
             scheduler,
+            exp_path: str,
             resume = False):
     best_acc = 0.
     start_epoch = 0
-    parrent_path = os.path.dirname(os.path.abspath(__file__))
-    checkpoint_path = os.path.join(parrent_path, 'checkpoint')
-    if not os.path.exists(checkpoint_path):
-        os.makedirs(checkpoint_path)
-    full_path = os.path.join(checkpoint_path, 'ckpt.pth')
+    if not os.path.exists(exp_path):
+        os.makedirs(exp_path)
+
+    full_path = os.path.join(exp_path, 'ckpt.pth')
     if resume:
         # load history
         if os.path.exists(full_path):
             print(f'Loading checkpoint from {full_path}')
-            checkpoint = torch.load(full_path)
+            checkpoint = torch.load(full_path, map_location=model.device)
             model.load_state_dict(checkpoint['net_dict'])
             start_epoch = checkpoint['epoch']
             best_acc = checkpoint['acc']
@@ -93,27 +94,24 @@ def trainer(model,
             print("Not checkpoint")
             return
     else: # create checkpoint/train.txt
-        with open(os.path.join(checkpoint_path, 'train.txt'), 'w') as f:
+        with open(os.path.join(exp_path, 'train.txt'), 'w') as f:
             line = 'epoch,train_loss,test_loss,train_err,test_err\n'
             f.write(line)
 
-    iterations = tqdm(range(start_epoch, number_of_epoch + start_epoch), desc='Training')
-    current_lr = scheduler.get_last_lr()[0]
-    iterations.set_postfix({'epoch loss': np.nan, 'epoch acc': np.nan, 'lr ': current_lr})
-    for epoch in iterations:
+    for epoch in range(start_epoch, number_of_epoch + start_epoch):
+        current_lr = scheduler.get_last_lr()[0]
+        print(f'Epoch {epoch + 1}/{number_of_epoch + start_epoch} lr: {current_lr}')
         train_loss, train_acc = train_on_epoch(train_generator=train_generator,
                                                optimizer=optimizer,
                                                loss_function=loss_function,
-                                               model=model,
-                                               epoch=epoch+1)
+                                               model=model)
         scheduler.step()
-        current_lr = scheduler.get_last_lr()[0]
-        iterations.set_postfix({'epoch loss': train_loss, 'epoch acc': train_acc, 'lr ': current_lr})
         # test
+        print('Testing ...')
         test_loss, test_acc = test(loss_function=loss_function,
                                    test_generator=test_generator,
                                    model=model)
-        print(f'Epoch{epoch+1}: test loss:{test_loss: .3f}, test_acc:{test_acc: .3f}')
+        print(f'Test loss:{test_loss: .3f}, test_acc:{test_acc: .3f}')
         # saving checkpoint
         if test_acc > best_acc:
             best_acc = test_acc
@@ -126,41 +124,83 @@ def trainer(model,
             torch.save(checkpoint, full_path)
 
         # save result training
-        with open(os.path.join(checkpoint_path, 'train.txt'), 'a') as f:
+        with open(os.path.join(exp_path, 'train.txt'), 'a') as f:
             line = f'{epoch + 1},{train_loss},{test_loss},{1. - train_acc},{1. - test_acc}\n'
             f.write(line)
 
-    plot_results(checkpoint_path)
+    plot_results(exp_path)
 
 def parser_args():
     parser = argparse.ArgumentParser(description="Train on market1501")
     parser.add_argument("--data-dir",default='/home/ha/Downloads/Dataset/VeRi/pytorch',type=str)
+    parser.add_argument("--image-shape", default=(128,64), nargs=2, type=int)
     parser.add_argument("--no-cuda",action="store_true")
     parser.add_argument("--gpu-id",default=0,type=int)
+    parser.add_argument("--batch-size", default=64, type=int)
     parser.add_argument("--lr0",default=0.1, type=float)
     parser.add_argument('--resume', '-r',action='store_true')
     parser.add_argument("--epochs", default=3, type=int)
+    parser.add_argument("--save-folder", default=None, type=str)
+    parser.add_argument("--pretrain", default=None, type=str)
+
     args = parser.parse_args()
     return args
 
 def main():
     args = parser_args()
     datapath = args.data_dir
-    # dataloader
-    train_dir = os.path.join(datapath,"train")
-    test_dir = os.path.join(datapath,"val")
-    trainloader = train_loader(train_dir, batch_size=64)
-    testloader = test_loader(test_dir, batch_size=128)
-    num_classes = len(trainloader.dataset.classes)
-
+    image_shape = args.image_shape
+    batch_size = args.batch_size
     # device
     device = "cuda:{}".format(args.gpu_id) if torch.cuda.is_available() and not args.no_cuda \
         else "cpu"
     if torch.cuda.is_available() and not args.no_cuda:
         cudnn.benchmark = True
 
+    # Checkpoint location
+    parrent_path = os.path.dirname(os.path.abspath(__file__))
+    checkpoint_path = os.path.join(parrent_path, 'checkpoint')
+    if args.save_folder is None:
+        if os.path.exists(checkpoint_path):
+            list_exps = os.listdir(checkpoint_path)
+            save_folder = f'exp{len(list_exps) + 1}'
+        else:
+            save_folder = 'exp1'
+    else:
+        save_folder = args.save_folder
+    exp_path = os.path.join(checkpoint_path, save_folder)
+
+    print(f'dataset:{args.data_dir}')
+    print(f'image shape:{args.image_shape}')
+    print(f'batch size:{args.batch_size}')
+    print(f'Save to: {exp_path}')
+    print(f'device: {device}')
+    if args.resume:
+        print('Resume training')
+    print('--------------------------------')
+
+    # dataloader
+    train_dir = os.path.join(datapath,"train")
+    test_dir = os.path.join(datapath,"val")
+    train_transform = custom_transform(mode='train', target_shape=image_shape)
+    trainloader = torch.utils.data.DataLoader(
+        torchvision.datasets.ImageFolder(train_dir, transform=train_transform),
+        batch_size=batch_size,
+        shuffle=True
+    )
+    test_transform = custom_transform(mode='val', target_shape=image_shape)
+    testloader = torch.utils.data.DataLoader(
+        torchvision.datasets.ImageFolder(test_dir, transform=test_transform),
+        batch_size=batch_size,
+        shuffle=False
+    )
+
     # net definition
-    net = Net(num_classes=num_classes)
+    net = Net(num_classes=len(trainloader.dataset.classes))
+
+    # pretrain weight with VeRi dataset
+    if args.pretrain is not None:
+        net.load(args.pretrain)
     net.to(device)
 
     # loss, optimizer and scheduler
@@ -174,7 +214,9 @@ def main():
             model=net,
             loss_function=loss_function,
             optimizer=optimizer,
-            scheduler=scheduler)
+            scheduler=scheduler,
+            exp_path=exp_path,
+            resume=args.resume)
 
 if __name__ == '__main__':
     main()

@@ -54,7 +54,7 @@ class Net(nn.Module):
         for p in self.parameters():
             return p.device
 
-    def __init__(self, num_classes=751, reid=False):
+    def __init__(self, num_classes=576, reid=False):
         super(Net, self).__init__()
         # 3 128 64
         self.conv = nn.Sequential(
@@ -66,17 +66,17 @@ class Net(nn.Module):
             # nn.ReLU(inplace=True),
             nn.MaxPool2d(3, 2, padding=1),
         )
-        # 32 64 32
+        # 64 64 32
         self.layer1 = make_layers(64, 64, 2, False)
-        # 32 64 32
+        # 64 64 32
         self.layer2 = make_layers(64, 128, 2, True)
-        # 64 32 16
+        # 128 32 16
         self.layer3 = make_layers(128, 256, 2, True)
-        # 128 16 8
+        # 256 16 8
         self.layer4 = make_layers(256, 512, 2, True)
-        # 256 8 4
+        # 512 8 4
         self.avgpool = nn.AdaptiveAvgPool2d(1)
-        # 256 1 1 
+        # 512 1 1
         self.reid = reid
         self.classifier = nn.Sequential(
             nn.Linear(512, 256),
@@ -93,15 +93,24 @@ class Net(nn.Module):
         x = self.layer3(x)
         x = self.layer4(x)
         x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
-        # B x 128
+        x = x.view(x.size(0), -1) # flatten
+        # B x 512
         if self.reid:
             x = x.div(x.norm(p=2, dim=1, keepdim=True))
             return x
         # classifier
         x = self.classifier(x)
         return x
-
+    def load(self, weight: None|str):
+        if weight is None:
+            return
+        try:
+            checkpoint = torch.load(weight, map_location='cpu')
+            state_dict = checkpoint['net_dict'] if 'net_dict' in checkpoint else checkpoint
+            filtered_state_dict = {k: v for k, v in state_dict.items() if 'classifier' not in k}
+            self.load_state_dict(filtered_state_dict, strict=False)
+        except FileNotFoundError:
+            print(f'Checkpoint not found: {weight}')
 
 if __name__ == '__main__':
     net = Net()

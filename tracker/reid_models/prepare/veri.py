@@ -80,13 +80,17 @@ def process_data(dir_path: str):
     # gallery
     nums = 0
     gallery_path = os.path.join(dir_path, 'image_test')
+    query_path = os.path.join(dir_path, 'image_query')
     gallery_save_path = os.path.join(save_path, 'gallery')
+    query_files = os.listdir(query_path)
     if not os.path.exists(gallery_save_path):
         os.makedirs(gallery_save_path)
     for _, _, files in os.walk(gallery_path, topdown=True):
         for name in files:
             if not name.endswith(".jpg"):
                 continue
+            if name in query_files:
+                continue # dont use query_files in gallery
             src_path = os.path.join(gallery_path, name)
             ID = name.split('_')[0]
             ID_path = os.path.join(gallery_save_path, ID)

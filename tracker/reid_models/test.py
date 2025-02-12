@@ -1,9 +1,39 @@
 import os
 import torch
 import torch.backends.cudnn as cudnn
+import torchvision
 import argparse
+from tqdm import tqdm
 from model import Net
-from utils import test_loader
+from utils.datatransform import custom_transform
+
+def compute_features(model, queryloader, galleryloader):
+    # compute features
+    query_features = torch.tensor([]).float()
+    query_labels = torch.tensor([]).long()
+    gallery_features = torch.tensor([]).float()
+    gallery_labels = torch.tensor([]).long()
+    device = model.device
+    with torch.no_grad():
+        for (inputs,labels) in tqdm(queryloader, desc='compute query features -----'):
+            inputs = inputs.to(device)
+            features = model(inputs).cpu()
+            query_features = torch.cat((query_features, features), dim=0)
+            query_labels = torch.cat((query_labels, labels))
+
+        for (inputs,labels) in tqdm(galleryloader, desc='compute gallery features ---'):
+            inputs = inputs.to(device)
+            features = model(inputs).cpu()
+            gallery_features = torch.cat((gallery_features, features), dim=0)
+            gallery_labels = torch.cat((gallery_labels, labels))
+
+    features = {
+    "qf": query_features,
+    "ql": query_labels,
+    "gf": gallery_features,
+    "gl": gallery_labels
+    }
+    return features
 
 def evaluate(features):
     qf = features['qf']
@@ -16,59 +46,57 @@ def evaluate(features):
     return top1correct / ql.size(0)
 
 def parser_args():
-    parser = argparse.ArgumentParser(description='Train on VeRi')
-    parser.add_argument('--datadir', default='/home/ha/Downloads/Dataset/VeRi/pytorch', type=str)
+    parser = argparse.ArgumentParser(description='Evaluate ReID model')
+    parser.add_argument('--datadir', default='/home/ha/Downloads/Dataset/VeRi/pytorch',
+                        type=str)
+    parser.add_argument('--ckpt-folder', default='exp1-128-128', type=str,
+                        help='The checkpoint folder with weight')
     parser.add_argument("--no-cuda",action="store_true")
     parser.add_argument("--gpu-id",default=0,type=int)
     args = parser.parse_args()
     return args
+
 def main(args):
+
+    print(f'Datapath: {args.datadir}')
+    print(f'Checkpoint: {args.ckpt_folder}')
+
     device = 'cuda:{}'.format(args.gpu_id) if torch.cuda.is_available() and not args.no_cuda else 'cpu'
     if torch.cuda.is_available() and not args.no_cuda:
-        cudnn.benchmark = True
+        cudnn.benchmark = True    
+    print(f'Device: {device}')
 
+    # dataloader
+    print('Load data ....')
     datadir = args.datadir
     query_dir = os.path.join(datadir, 'query')
     gallery_dir = os.path.join(datadir, 'gallery')
-    queryloader = test_loader(query_dir)
-    galleryloader = test_loader(gallery_dir)
+    transform = custom_transform(mode='test', target_shape=(128, 128))
+    queryloader = torch.utils.data.DataLoader(
+        torchvision.datasets.ImageFolder(query_dir, transform=transform),
+        batch_size=64,
+        shuffle=True
+    )
+    galleryloader = torch.utils.data.DataLoader(
+        torchvision.datasets.ImageFolder(gallery_dir, transform=transform),
+        batch_size=64,
+        shuffle=False
+    )
 
     # load model
     parrent_path = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(parrent_path, 'checkpoint', 'ckpt.pth')
-    net = Net(reid=True)
+    model_path = os.path.join(parrent_path, 'checkpoint', args.ckpt_folder, 'ckpt.pth')
     assert os.path.isfile(model_path), 'Checkpoint not found'
-    print('Load checkpoint')
-    checkpoint = torch.load(model_path)
-    net.load_state_dict(checkpoint['net_dict'], strict=False)
+    print('Load checkpoint ....')
+    net = Net(reid=True)
+    net.load(model_path)
     net.eval()
     net.to(device)
 
-    # compute features
-    query_features = torch.tensor([]).float()
-    query_labels = torch.tensor([]).long()
-    gallery_features = torch.tensor([]).float()
-    gallery_labels = torch.tensor([]).long()
-
-    with torch.no_grad():
-        for idx,(inputs,labels) in enumerate(queryloader):
-            inputs = inputs.to(device)
-            features = net(inputs).cpu()
-            query_features = torch.cat((query_features, features), dim=0)
-            query_labels = torch.cat((query_labels, labels))
-
-        for idx,(inputs,labels) in enumerate(galleryloader):
-            inputs = inputs.to(device)
-            features = net(inputs).cpu()
-            gallery_features = torch.cat((gallery_features, features), dim=0)
-            gallery_labels = torch.cat((gallery_labels, labels))
-    gallery_labels -= 2
-    features = {
-    "qf": query_features,
-    "ql": query_labels,
-    "gf": gallery_features,
-    "gl": gallery_labels
-    }
+    # compute features and evaluate
+    features = compute_features(model=net,
+                                galleryloader=galleryloader,
+                                queryloader=queryloader)
     res = evaluate(features)
     print(f'Accuracy: Rank@1 {res: .3f}')
 
