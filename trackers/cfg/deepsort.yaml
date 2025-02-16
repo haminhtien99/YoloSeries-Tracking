@@ -1,0 +1,10 @@
+tracker_type: deepsort # tracker type
+n_init: 3 # Minimum number of detections before a tracker is considered valid
+max_age: 70 # Maximum number of frames to keep a tracker alive without detection
+nn_budget: 100
+max_dist: 0.2
+min_confidence: 0.3
+nms_max_overlap: 1.0
+max_iou_distance: 0.7
+model_path: /home/ha/projects/YoloSeries-Tracking/tracker/reid_models/checkpoint/visdrone-128-128/ckpt.pth
+use_cuda: True
