@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import os
 
 class BasicBlock(nn.Module):
     def __init__(self, c_in, c_out, is_downsample=False):
@@ -104,6 +104,8 @@ class Net(nn.Module):
     def load(self, weight: None|str):
         if weight is None:
             return
+        if not os.path.exists(weight):
+            weight = os.path.join(os.path.dirname(os.path.abspath(__file__)), weight)
         try:
             checkpoint = torch.load(weight, map_location='cpu')
             state_dict = checkpoint['net_dict'] if 'net_dict' in checkpoint else checkpoint
