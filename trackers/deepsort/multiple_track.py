@@ -7,7 +7,7 @@ from .linear_assignment import matching_cascade,\
                                         gate_cost_matrix
 from .iou_matching import iou_cost
 from .single_track import Track
-
+from .detection import Detection
 
 class Tracker:
     """
@@ -46,7 +46,7 @@ class Tracker:
         self.n_init = n_init
 
         self.kf = KalmanFilter()
-        self.tracks = []
+        self.tracks: list[Track] = []
         self._next_id = 1
 
     def predict(self):
@@ -130,9 +130,13 @@ class Tracker:
         unmatched_tracks = list(set(unmatched_tracks_a + unmatched_tracks_b))
         return matches, unmatched_tracks, unmatched_detections
 
-    def _initiate_track(self, detection):
+    def _initiate_track(self, detection: Detection):
         mean, covariance = self.kf.initiate(detection.to_xyah())
         self.tracks.append(Track(
             mean, covariance, self._next_id, self.n_init, self.max_age,
+            detection.add_infor,
             detection.feature))
         self._next_id += 1
+    def reset(self):
+        self.tracks = []
+        self._next_id = 1

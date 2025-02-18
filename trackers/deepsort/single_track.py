@@ -1,6 +1,6 @@
 # vim: expandtab:ts=4:sw=4
 
-
+from .detection import Detection
 class TrackState:
     """
     Enumeration type for the single target track state. Newly created tracks are
@@ -63,7 +63,7 @@ class Track:
 
     """
 
-    def __init__(self, mean, covariance, track_id, n_init, max_age,
+    def __init__(self, mean, covariance, track_id, n_init, max_age, add_infor,
                  feature=None):
         self.mean = mean
         self.covariance = covariance
@@ -79,6 +79,7 @@ class Track:
 
         self._n_init = n_init
         self._max_age = max_age
+        self.add_infor = add_infor
 
     def to_tlwh(self):
         """Get current position in bounding box format `(top left x, top left y,
@@ -123,7 +124,7 @@ class Track:
         self.age += 1
         self.time_since_update += 1
 
-    def update(self, kf, detection):
+    def update(self, kf, detection: Detection):
         """Perform Kalman filter measurement update step and update the feature
         cache.
 
@@ -138,7 +139,7 @@ class Track:
         self.mean, self.covariance = kf.update(
             self.mean, self.covariance, detection.to_xyah())
         self.features.append(detection.feature)
-
+        self.add_infor = detection.add_infor
         self.hits += 1
         self.time_since_update = 0
         if self.state == TrackState.Tentative and self.hits >= self._n_init:

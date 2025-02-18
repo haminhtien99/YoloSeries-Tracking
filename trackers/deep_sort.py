@@ -26,23 +26,24 @@ class DeepSort(object):
         metric = NearestNeighborDistanceMetric("cosine", max_cosine_distance, nn_budget)
         self.tracker = Tracker(metric, args.max_iou_distance, args.max_age, args.n_init)
 
-    def update(self, det: Boxes, ori_img):
-        bbox_xywh = det.xywh
-        confidences = det.conf.reshape(-1, 1)
-        tracks = self._update(bbox_xywh, confidences, ori_img)
-        return tracks
 
-    def _update(self, bbox_xywh, confidences, ori_img):
+    def update(self, boxes: Boxes, ori_img):
         self.height, self.width = ori_img.shape[:2]
+
         # generate detections
-        features = self._get_features(bbox_xywh, ori_img)
+        confidences = boxes.conf
+        filter_conf = confidences > self.min_confidence
+        confidences = confidences[filter_conf]
+        bbox_xywh = boxes.xywh[filter_conf]
         bbox_tlwh = self._xywh_to_tlwh(bbox_xywh)
-        detections = [Detection(bbox_tlwh[i], conf, features[i]) for i,conf in enumerate(confidences) if conf>self.min_confidence]
+        classes = boxes.cls[filter_conf]
+        features = self._get_features(bbox_xywh, ori_img)
+        detections = [Detection(bbox_tlwh[i], conf, features[i], [classes[i], conf, i])
+                      for i,conf in enumerate(confidences)]
 
         # run on non-maximum supression
-        boxes = np.array([d.tlwh for d in detections])
-        scores = np.array([d.confidence for d in detections])
-        indices = non_max_suppression(boxes, self.nms_max_overlap, scores)
+        bbox_tlwh = np.asarray(bbox_tlwh, dtype=np.float32)
+        indices = non_max_suppression(bbox_tlwh, self.nms_max_overlap, confidences)
         detections = [detections[i] for i in indices]
 
         # update tracker
@@ -57,7 +58,13 @@ class DeepSort(object):
             box = track.to_tlwh()
             x1, y1, x2, y2 = self._tlwh_to_xyxy(box)
             track_id = track.track_id
-            outputs.append(np.array([x1, y1, x2, y2, track_id], dtype=np.int32))
+            if track.time_since_update == 1:# unmatched tracks
+                conf = 0.
+                det_id = -1
+                cls = track.add_infor[0]
+            else: cls, conf, det_id = track.add_infor
+            outputs.append(np.array([x1, y1, x2, y2, track_id, conf, cls, det_id], dtype=np.float32))
+
         if len(outputs) > 0:
             outputs = np.stack(outputs, axis=0)
         return outputs
@@ -99,3 +106,36 @@ class DeepSort(object):
         else:
             features = np.array([])
         return features
+    def reset(self):
+        self.tracker.reset()
+
+if __name__ == '__main__':
+    from trackers.utils.load_yaml import load_yaml
+    args = load_yaml("trackers/cfg/deepsort.yaml")
+    deepsort = DeepSort(args)
+    import cv2
+    ori_img = cv2.imread("/home/ha/Downloads/Dataset/VisDrone2019-vehicles-MOT/VisDrone2019-MOT-val/uav0000117_02622_v/img1/0000001.jpg")
+    
+    # Create sample detection boxes
+    bboxes = torch.tensor([
+        [443,754,443 + 147,754+156, 0.9, 0],
+        [1490,451,1490+147,451+93, 0.7, 0],
+        [1235,388,1235+94,388+68, 0.4, 0]
+    ])
+    # Create Boxes object
+    det = Boxes(bboxes, ori_img)
+    det = det.cpu().numpy()
+    # Run the update method
+    tracks = deepsort.update(det, ori_img)
+    tracks = deepsort.update(det, ori_img)
+    tracks = deepsort.update(det, ori_img)
+    bboxes = torch.tensor([
+        [443,754,443 + 147,754+156, 0.9, 0],
+        [1490,451,1490+147,451+93, 0.7, 0]
+    ])
+    det = Boxes(bboxes, ori_img)
+    det = det.cpu().numpy()
+    tracks = deepsort.update(det, ori_img)
+
+
+    print(tracks)
