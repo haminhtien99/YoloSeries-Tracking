@@ -87,13 +87,13 @@ def on_predict_postprocess_end(predictor: object, persist: bool = False) -> None
             tracker.reset()
             predictor.vid_path[i if is_stream else 0] = vid_path
 
-        det = predictor.results[i].boxes.cpu().numpy()
-        tracks = tracker.update(det, im0s[i])
+        boxes = predictor.results[i].boxes.cpu().numpy()
+        tracks = tracker.update(boxes, im0s[i])
         if len(tracks) == 0:
             continue
         idx = tracks[:, -1].astype(int)
-        predictor.results[i] = predictor.results[i][idx]
-
+        valid_indices = idx[idx > -1]
+        predictor.results[i] = predictor.results[i][valid_indices]
         update_args = {"boxes": torch.as_tensor(tracks[:, :-1])}
         predictor.results[i].update(**update_args)
 
