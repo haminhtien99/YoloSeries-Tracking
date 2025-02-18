@@ -9,7 +9,7 @@ class ConfigObject():
             setattr(self, key, val)
 def load_yaml(filename):
     if not os.path.exists(filename):
-        filename = os.path.join('tracker', 'cfg', filename)
+        filename = os.path.join('trackers', 'cfg', filename)
     if not os.path.exists(filename):
         raise FileNotFoundError(f"File {filename} not found.")
     with open(filename, 'r') as f:
