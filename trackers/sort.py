@@ -33,6 +33,7 @@ import glob
 import time
 import argparse
 from filterpy.kalman import KalmanFilter
+from .utils.non_max_suppression import non_max_suppression
 
 from ultralytics.engine.results import Boxes
 
@@ -223,19 +224,20 @@ class Sort(object):
         self.max_age = args.max_age
         self.min_hits = args.min_hits
         self.iou_threshold = args.iou_threshold
+        self.max_bbox_overlap = args.max_bbox_overlap
         self.min_score = args.min_score
         self.trackers :list[KalmanBoxTracker] = []
         self.frame_count = 0
 
-    def update(self, det: Boxes, img):
+    def update(self, boxes: Boxes, img):
         """
         Params:
         det (Boxes): A Boxes object containing bounding boxes and associated information.
         Returns the a similar array, where the last column is the object ID.
         """
-        xyxy = det.xyxy
-        cls = det.cls.reshape(-1, 1)
-        score = det.conf.reshape(-1, 1)
+        xyxy = boxes.xyxy
+        cls = boxes.cls.reshape(-1, 1)
+        score = boxes.conf.reshape(-1, 1)
         idx = np.arange(len(cls)).reshape(-1, 1)
         dets = np.concatenate((xyxy, score, cls, idx), axis=1)
         if len(dets) == 0:
@@ -255,6 +257,11 @@ class Sort(object):
         # delete detections with score under self.min_score
         dets = dets[dets[:, 4] >= self.min_score]
 
+        # Run non-maximum suppression
+        bbox_tlwh = self._to_tlwh(dets[:, :4])
+        indices = non_max_suppression(bbox_tlwh, self.max_bbox_overlap, dets[:, 4])
+        dets = dets[indices]
+    
         # get predicted locations from existing trackers.
         tracklets = np.zeros((len(self.trackers), 8))
         to_del = []
@@ -296,6 +303,13 @@ class Sort(object):
         self.frame_count = 0
     def __str__(self):
         return f'SORT: max_age={self.max_age}, min_hits={self.min_hits}, iou_threshold={self.iou_threshold}, min_score={self.min_score}'
+    def _to_tlwh(self, bbox_xyxy: np.ndarray):
+        bbox_tlwh = bbox_xyxy.copy()
+        bbox_tlwh[:, 0] = bbox_xyxy[:, 0]
+        bbox_tlwh[:, 1] = bbox_xyxy[:, 1]
+        bbox_tlwh[:, 2] = bbox_xyxy[:, 2] - bbox_xyxy[:, 0]
+        bbox_tlwh[:, 3] = bbox_xyxy[:, 3] - bbox_xyxy[:, 1]
+        return bbox_tlwh
 
 def parse_args():
     """Parse input arguments."""
