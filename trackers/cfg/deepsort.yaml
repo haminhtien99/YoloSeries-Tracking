@@ -8,3 +8,4 @@ nms_max_overlap: 0.9 # Maximum overlap between two bounding boxes to consider th
 max_iou_distance: 0.7 # Maximum IOU distance
 model_path: checkpoint/visdrone-128-128/ckpt.pth # Path to the reid checkpoint
 use_cuda: True # Use CUDA
+imgsz: [64,64] # Size of the input image reid model
