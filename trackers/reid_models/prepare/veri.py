@@ -1,147 +1,103 @@
-'''
-Source from VeRidataset
-https://github.com/JDAI-CV/VeRidataset
-The dataset is used for non-commercial purposes
-Downloaded from another source on kaggle
-https://www.kaggle.com/datasets/abhyudaya12/veri-vehicle-re-identification-dataset
-'''
-
 import os
 from shutil import copyfile
-import argparse
 
-def process_data(dir_path: str):
-    """Process
-    old path:
-        dir_path
-        |---image_train
-        |---image_query
-        |---image_test
-        ....
-    new path:
-        dir_path/pytorch
-        |---gallery
-        |---query
-        |---train
-        |---train_all
-        |---val
-    """
-    if dir_path is None or not os.path.exists(dir_path):
-        raise Exception(f"{dir_path} is not found")
-    nums = 0
-    nums_dict = {}
-    save_path = os.path.join(dir_path, 'pytorch')
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-    #-----------------------------------------
-    # query
-    query_path = os.path.join(dir_path, 'image_query')
-    query_save_path = os.path.join(save_path, 'query')
-    if not os.path.exists(query_save_path):
-        os.makedirs(query_save_path)
-    for _, _, files in os.walk(query_path, topdown=True):
+def copy_file(s, t):
+    for root, dirs, files in os.walk(s):
         for name in files:
-            if not name.endswith(".jpg"):
-                continue
-            src_path = os.path.join(query_path, name)
-            ID = name.split('_')[0]
-            ID_path = os.path.join(query_save_path, ID)
-            if not os.path.exists(ID_path):
-                os.makedirs(ID_path)
-            dst_path = os.path.join(ID_path, name)
-            copyfile(src_path, dst_path)
-            nums += 1
-    nums_dict["query"] = nums
-    print(f'query: {nums}')
+            copyfile(root+'/'+name,t+'/'+name)
 
-    #-----------------------------------------
-    # train_all
-    nums = 0
-    train_all_path = os.path.join(dir_path, 'image_train')
-    train_all_save_path = os.path.join(save_path, 'train_all')
-    if not os.path.exists(train_all_save_path):
-        os.makedirs(train_all_save_path)
-    for _, _, files in os.walk(train_all_path, topdown=True):
+# You only need to change this line to your dataset download path
+download_path = '/home/ha/Downloads/Dataset/VeRi'
+
+if not os.path.isdir(download_path):
+    print('please change the download_path')
+
+save_path = download_path + '/image_all'
+train_path = download_path + '/image_train'
+gallery_path = download_path + '/image_test'
+query_path  = download_path + '/image_query'
+
+if not os.path.isdir(save_path):
+    os.mkdir(save_path)
+
+    copy_file(train_path, save_path)
+    copy_file(query_path, save_path)
+    copy_file(gallery_path,  save_path)
+
+#---------------------------------------
+#train
+os.mkdir(download_path + '/pytorch')
+train_save_path = download_path + '/pytorch/train'
+if not os.path.isdir(train_save_path):
+    os.mkdir(train_save_path)
+
+    for root, dirs, files in os.walk(train_path, topdown=True):
         for name in files:
-            if not name.endswith(".jpg"):
+            if not name[-3:]=='jpg':
                 continue
-            src_path = os.path.join(train_all_path, name)
-            ID = name.split('_')[0]
-            ID_path = os.path.join(train_all_save_path, ID)
-            if not os.path.exists(ID_path):
-                os.makedirs(ID_path)
-            dst_path = os.path.join(ID_path, name)
-            copyfile(src_path, dst_path)
-            nums += 1
-    nums_dict["train_all"] = nums
-    print(f'train_all: {nums}')
+            ID  = name.split('_')
+            src_path = train_path + '/' + name
+            dst_path = train_save_path + '/v' + ID[0]
+            if not os.path.isdir(dst_path):
+                os.mkdir(dst_path)
+            copyfile(src_path, dst_path + '/' + name)
 
-    #-----------------------------------------
-    # gallery
-    nums = 0
-    gallery_path = os.path.join(dir_path, 'image_test')
-    query_path = os.path.join(dir_path, 'image_query')
-    gallery_save_path = os.path.join(save_path, 'gallery')
-    query_files = os.listdir(query_path)
-    if not os.path.exists(gallery_save_path):
-        os.makedirs(gallery_save_path)
-    for _, _, files in os.walk(gallery_path, topdown=True):
+#---------------------------------------
+#query
+train_path = query_path
+train_save_path = download_path + '/pytorch/query'
+if not os.path.isdir(train_save_path):
+    os.mkdir(train_save_path)
+
+    for root, dirs, files in os.walk(train_path, topdown=True):
         for name in files:
-            if not name.endswith(".jpg"):
+            if not name[-3:]=='jpg':
                 continue
-            if name in query_files:
-                continue # dont use query_files in gallery
-            src_path = os.path.join(gallery_path, name)
-            ID = name.split('_')[0]
-            ID_path = os.path.join(gallery_save_path, ID)
-            if not os.path.exists(ID_path):
-                os.makedirs(ID_path)
-            dst_path = os.path.join(ID_path, name)
-            copyfile(src_path, dst_path)
-            nums += 1
-    nums_dict["gallery"] = nums
-    print(f'gallery: {nums}')
+            ID  = name.split('_')
+            src_path = train_path + '/' + name
+            dst_path = train_save_path + '/v' + ID[0]
+            if not os.path.isdir(dst_path):
+                os.mkdir(dst_path)
+            copyfile(src_path, dst_path + '/' + name)
 
-    #-----------------------------------------
-    # train/val
-    nums = 0
-    nums_val = 0
-    train_path = os.path.join(dir_path, 'image_train')
-    train_save_path = os.path.join(save_path, 'train')
-    val_save_path = os.path.join(save_path, 'val')
-    if not os.path.exists(train_save_path):
-        os.makedirs(train_save_path)
-        os.makedirs(val_save_path)
-    for _, _, files in os.walk(train_path, topdown=True):
+#---------------------------------------
+#gallery
+train_path = gallery_path
+train_save_path = download_path + '/pytorch/gallery'
+if not os.path.isdir(train_save_path):
+    os.mkdir(train_save_path)
+
+    for root, dirs, files in os.walk(train_path, topdown=True):
         for name in files:
-            if not name.endswith(".jpg"):
+            if not name[-3:]=='jpg':
                 continue
-            src_path = os.path.join(train_path, name)
-            ID = name.split('_')[0]
-            ID_path = os.path.join(train_save_path, ID)
-            if not os.path.exists(ID_path):
-                ID_path = os.path.join(val_save_path, ID)
-                os.makedirs(ID_path)
-                dst_path = os.path.join(ID_path, name)
-                copyfile(src_path, dst_path)
-                os.makedirs(os.path.join(train_save_path, ID))
-                nums_val += 1
-                continue
-            dst_path = os.path.join(ID_path, name)
-            copyfile(src_path, dst_path)
-            nums += 1
-    nums_dict['train'] = nums
-    nums_dict['val'] = nums_val
-    print(f'train: {nums}, val: {nums_val}')
-def main():
-    parser = argparse.ArgumentParser(description="VeRID dataset pre-process")
-    parser.add_argument(
-        "--data_dir", default="/home/ha/Downloads/Dataset/VeRi", help="dataset directory", type=str
-    )
-    
-    args = parser.parse_args()
-    print(args)
-    process_data(dir_path=args.data_dir)
+            ID  = name.split('_')
+            src_path = train_path + '/' + name
+            dst_path = train_save_path + '/v' + ID[0]
+            if not os.path.isdir(dst_path):
+                os.mkdir(dst_path)
+            copyfile(src_path, dst_path + '/' + name)
 
-if __name__ == "__main__":
-    main()
+#---------------------------------------
+#train_all
+train_path = save_path
+train_save_path = download_path + '/train_all'
+if not os.path.isdir(train_save_path):
+    os.mkdir(train_save_path)
+
+    for root, dirs, files in os.walk(train_path, topdown=True):
+        for name in files:
+            if not name[-3:]=='jpg':
+                continue
+            ID  = name.split('_')
+            src_path = train_path + '/' + name
+            dst_path = train_save_path + '/v' + ID[0]
+            if not os.path.isdir(dst_path):
+                os.mkdir(dst_path)
+            copyfile(src_path, dst_path + '/' + name)
+
+#train_veri_path =  './data/pytorch/train+veri'
+#original_train_save_path = './data/pytorch/train'
+#if not os.path.isdir(train_veri_path):
+#    os.system('rsync -r %s/ %s/'%(os.path.abspath(train_save_path) , os.path.abspath(train_veri_path) ) )
+#    os.system('rsync -r %s/ %s/'%(os.path.abspath(original_train_save_path) , os.path.abspath(train_veri_path) ) )
