@@ -1,17 +1,16 @@
 import torch
 from torchvision import transforms
-import numpy as np
 import cv2
-from .model import Net
+from .resnet_like import Net
 
 
 class Extractor(object):
-    def __init__(self, model_path, use_cuda=True):
+    def __init__(self, model_path, use_cuda=True, size=(64, 64)):
         self.net = Net(reid=True)
         self.device = "cuda" if torch.cuda.is_available() and use_cuda else "cpu"
-        self.net.load(model_path)
+        self.net.load_checkpoint(model_path)
         self.net.to(self.device)
-        self.size = (128, 128)
+        self.size = size
         self.norm = transforms.Compose([
            transforms.ToTensor(),
            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
@@ -28,12 +27,12 @@ class Extractor(object):
         im_batch = self._preprocess(im_crops)
         with torch.no_grad():
             im_batch = im_batch.to(self.device)
-            features = self.net(im_batch)
+            features = self.net(im_batch)   # raw features, without L2 normalization
         return features.cpu().numpy()
 
 if __name__ == '__main__':
     import os
-    img = cv2.imread(os.path.join(os.path.dirname(__name__), 'demo.jpg'))[:,:,(2,1,0)] # BGR to RGB
+    img = cv2.imread(os.path.join(os.path.dirname(__file__), 'demo.jpg'))[:,:,(2,1,0)] # BGR to RGB
     extr = Extractor("checkpoint/visdrone-128-128/ckpt.pth")
     feature = extr([img])
     print(feature.shape)
