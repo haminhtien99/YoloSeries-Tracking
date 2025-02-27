@@ -1,8 +1,6 @@
 import yaml
 import os
 
-import yaml
-
 class ConfigObject():
     def __init__(self, data):
         for key, val in data.items():
