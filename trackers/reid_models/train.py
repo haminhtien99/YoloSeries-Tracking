@@ -3,16 +3,27 @@ import os
 
 import numpy as np
 import torch
-import torchvision
+import torch.nn.functional as F 
 import torch.backends.cudnn as cudnn
+from pytorch_metric_learning import losses, miners
 from tqdm import tqdm
 
-from model import Net
-from utils.datatransform import custom_transform
-from utils.plot import plot_results
+
+# from trackers.reid_models.resnet_like import Net
+# from trackers.reid_models.resnet import *
+from resnet_like import Net
+from resnet import *
+from evaluate import build_dist, evaluate_rank
+from utils.datasets import dataloader
+from utils.log import prepare_training, save_checkpoint
+from utils.lr_scheduler import fastReID_lr_lambda
+from utils.load_yaml import load_yaml
+Nets = {'resnet-like': Net,
+        'resnet18': resnet18, 'resnet34': resnet34, 'resnet50': resnet50, 'resnet101': resnet101,
+        'resnext50_32x4d': resnext50_32x4d, 'resnext101_32x8d': resnext101_32x8d}
 
 # train
-def train_on_batch(model, x_batch, y_batch, optimizer, loss_function):
+def train_on_batch(model, x_batch, y_batch, optimizer, criterion, metric_loss=None, miner=None):
     device = model.device
     x_batch, y_batch = x_batch.to(device), y_batch.to(device)
 
@@ -20,9 +31,14 @@ def train_on_batch(model, x_batch, y_batch, optimizer, loss_function):
     optimizer.zero_grad()
 
     # forward
-    output = model(x_batch)
-    correct = output.max(dim=1)[1].eq(y_batch).sum().item()
-    loss = loss_function(output, y_batch)
+    logits, features = model(x_batch)
+    features = features.div(features.norm(p=2, dim=1, keepdim=True))
+
+    correct = logits.max(dim=1)[1].eq(y_batch).sum().item()
+    loss = criterion(logits, y_batch)
+    if miner is not None and metric_loss is not None:
+        hard_pairs = miner(features, y_batch)
+        loss += metric_loss(features, y_batch, hard_pairs)
 
     # backward
     loss.backward()
@@ -30,232 +46,224 @@ def train_on_batch(model, x_batch, y_batch, optimizer, loss_function):
 
     return loss.cpu().item(), correct
 
-def train_on_epoch(train_generator, optimizer, loss_function, model):
+def train_on_epoch(train_generator, optimizer, scheduler: torch.optim.lr_scheduler.LambdaLR,
+                   criterion, model,
+                   metric_loss=None, miner=None, freeze=False):
     epoch_loss = 0.
     total = 0
     acc = 0.
-    iterations = tqdm(train_generator, desc='Training per epoch')
-    iterations.set_postfix({'batch loss': np.nan})
-    for (x_batch, y_batch) in iterations:
-        batch_loss, corr = train_on_batch(model=model,
-                                          x_batch=x_batch,
-                                          y_batch=y_batch,
-                                          optimizer=optimizer,
-                                          loss_function=loss_function)
+    process_bar = tqdm(train_generator, desc='Training per epoch')
+    process_bar.set_postfix({'batch loss': np.nan, 'iter': scheduler.last_epoch, 'lr': scheduler.get_last_lr()})
+    for (x_batch, y_batch) in process_bar:
+        batch_loss, corr = train_on_batch(
+            model=model,
+            x_batch=x_batch,
+            y_batch=y_batch,
+            optimizer=optimizer,
+            criterion=criterion,
+            metric_loss=metric_loss,
+            miner=miner
+        )
+        scheduler.step()
         epoch_loss += batch_loss * len(y_batch)
         total += len(x_batch)
         acc += corr
-        iterations.set_postfix({'batch loss': batch_loss})
+        process_bar.set_postfix({'batch loss': batch_loss, 'iter': scheduler.last_epoch, 'lr': scheduler.get_last_lr()[0]})
+
+        # unfreeze backbone model and reinitialize scheduler
+        iteration = scheduler.last_epoch
+        if freeze:
+            if iteration == 2000:
+                for name, param in model.named_parameters():
+                    if 'fc' not in name:
+                        param.requires_grad = True
+                optimizer.add_param_group({
+                    'params': [p for p in model.parameters() if 'fc' not in p],
+                    'lr': 3.5e-4
+                })
+                scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=fastReID_lr_lambda, last_epoch=iteration)
+            freeze = False
     return epoch_loss/total, acc/total
 
-# test during training
-def test(loss_function, test_generator, model):
+def test(test_loader, model, num_query, metric_distance='cosine'):
     model.eval()
     device = model.device
-    test_loss = 0.
-    acc = 0
-    total = 0
+    features = torch.tensor([]).float().to(device)
+    camera_ids = torch.tensor([]).int().to(device)
+    pids = torch.tensor([]).int().to(device)
     with torch.no_grad():
-        for (x_batch, y_batch) in test_generator:
-            x_batch, y_batch = x_batch.to(device), y_batch.to(device)
-            output = model(x_batch)
-            loss = loss_function(output, y_batch)
+        for (imgs_batch, cam_ids_batch, pids_batch) in test_loader:
+            imgs_batch = imgs_batch.to(device)
+            cam_ids_batch = cam_ids_batch.to(device)
+            pids_batch = pids_batch.to(device)
 
-            test_loss += loss.item() * len(y_batch)
-            acc += output.max(dim=1)[1].eq(y_batch).sum().item()
-            total += len(x_batch)
+            _, feats_batch = model(imgs_batch)
+            features = torch.cat((features, feats_batch), dim=0)
+            camera_ids = torch.cat((camera_ids, cam_ids_batch), dim=0)
+            pids = torch.cat((pids, pids_batch))
 
-    return test_loss/total, acc/total
+    query_features = features[:num_query]
+    query_camera_ids = camera_ids[:num_query]
+    query_pids = pids[:num_query]
 
-def checkpoint_setup(model, save_folder, resume=False):
+    gallery_features = features[num_query:]
+    gallery_camera_ids = camera_ids[num_query:]
+    gallery_pids = pids[num_query:]
 
-    # Checkpoint location
-    parrent_path = os.path.dirname(os.path.abspath(__file__))
-    checkpoint_path = os.path.join(parrent_path, 'checkpoint')
-    if resume:
-        # load history
-        full_path = os.path.join(checkpoint_path, save_folder, 'ckpt.pth')
-        if os.path.exists(full_path):
-            print(f'Loading checkpoint from {full_path}')
-            checkpoint = torch.load(full_path, map_location=model.device)
-            model.load_state_dict(checkpoint['net_dict'])
-            start_epoch = checkpoint['epoch']
-            best_acc = checkpoint['acc']
-            return best_acc, start_epoch
-        else:
-            print("Not checkpoint, create new checkpoint")
+    dist = build_dist(query_features, gallery_features, metric_distance=metric_distance)
+    cmc, all_AP, all_INP = evaluate_rank(
+        dist,
+        query_pids.cpu().numpy(), gallery_pids.cpu().numpy(),
+        query_camera_ids.cpu().numpy(), gallery_camera_ids.cpu().numpy(),
+        max_rank=50
+    )
+    mAP = np.mean(all_AP) * 100
+    mINP = np.mean(all_INP) * 100
+    rank1 = cmc[0] * 100
+    rank5 = cmc[4] * 100
+    rank10 = cmc[9] * 100
+    return [rank1, rank5, rank10, mAP, mINP]
 
-    # create checkpoint/train.txt
-    if not os.path.exists(checkpoint_path):
-        os.makedirs(checkpoint_path)
-    if save_folder is None:
-        save_folder = f'exp{len(os.listdir(checkpoint_path)) + 1}'
-    else:
-        save_folder = save_folder
-
-    best_acc = 0.
-    start_epoch = 0
-
-
-def trainer(model,
-            number_of_epoch,
-            train_generator,
-            test_generator,
-            loss_function,
-            optimizer,
-            scheduler,
-            exp_path: str,
-            resume = False):
-    best_acc = 0.
-    start_epoch = 0
-    if not os.path.exists(exp_path):
-        os.makedirs(exp_path)
-
-    full_path = os.path.join(exp_path, 'ckpt.pth')
-    if resume:
-        # load history
-        if os.path.exists(full_path):
-            print(f'Loading checkpoint from {full_path}')
-            checkpoint = torch.load(full_path, map_location=model.device)
-            model.load_state_dict(checkpoint['net_dict'])
-            start_epoch = checkpoint['epoch']
-            best_acc = checkpoint['acc']
-        else:
-            print("Not checkpoint")
-            return
-    else: # create checkpoint/train.txt
-        with open(os.path.join(exp_path, 'train.txt'), 'w') as f:
-            line = 'epoch,train_loss,test_loss,train_err,test_err\n'
-            f.write(line)
-
+def trainer(
+        model,
+        number_of_epoch,
+        train_generator,
+        test_generator,
+        num_query,
+        criterion,
+        optimizer,
+        scheduler,
+        exp_path: str,
+        metric_loss=None,
+        miner=None,
+        resume=False,
+        freeze=False
+    ):
+    best_metric, start_epoch = prepare_training(resume, model, optimizer, scheduler, exp_path)
     for epoch in range(start_epoch, number_of_epoch + start_epoch):
         current_lr = scheduler.get_last_lr()[0]
         print(f'Epoch {epoch + 1}/{number_of_epoch + start_epoch} lr: {current_lr}')
-        train_loss, train_acc = train_on_epoch(train_generator=train_generator,
-                                               optimizer=optimizer,
-                                               loss_function=loss_function,
-                                               model=model)
-        scheduler.step()
+        train_loss, train_acc = train_on_epoch(
+            train_generator=train_generator,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            criterion=criterion,
+            metric_loss=metric_loss,
+            miner=miner,
+            model=model,
+            freeze=freeze)
+
         # test
         print('Testing ...')
-        test_loss, test_acc = test(loss_function=loss_function,
-                                   test_generator=test_generator,
-                                   model=model)
-        print(f'Test loss:{test_loss: .3f}, test_acc:{test_acc: .3f}')
+        test_results = test(
+            test_loader=test_generator,
+            model=model,
+            num_query=num_query,
+            metric_distance='cosine'
+        )
+        r1, mAP, mINP = test_results[0], test_results[-2], test_results[-1]
+        print(f'Rank@1:{r1:.2f}, mAP:{mAP:.2f}, mINP:{mINP:.2f}')
         # saving checkpoint
-        if test_acc > best_acc:
-            best_acc = test_acc
-            print(f"Saving parameters to {full_path}")
-            checkpoint = {
-                'net_dict':model.state_dict(),
-                'acc':test_acc,
-                'epoch':epoch,
-            }
-            torch.save(checkpoint, full_path)
-
-        # save result training
-        with open(os.path.join(exp_path, 'train.txt'), 'a') as f:
-            line = f'{epoch + 1},{train_loss},{test_loss},{1. - train_acc},{1. - test_acc}\n'
-            f.write(line)
-
-    plot_results(exp_path)
-def dataloader(train_dir: str, val_dir: str, image_shape=(128, 128), batch_size=64):
-    train_transform = custom_transform(mode='train', target_shape=image_shape)
-    train_loader = torch.utils.data.DataLoader(
-        torchvision.datasets.ImageFolder(train_dir, transform=train_transform),
-        batch_size=batch_size,
-        shuffle=True
-    )
-    val_transform = custom_transform(mode='val', target_shape=image_shape)
-    val_loader = torch.utils.data.DataLoader(
-        torchvision.datasets.ImageFolder(val_dir, transform=val_transform),
-        batch_size=batch_size,
-        shuffle=False
-    )
-    return train_loader, val_loader
-
-def parser_args():
-    parser = argparse.ArgumentParser(description="Train ReID vehicle")
-    parser.add_argument("--data-dir",default='/home/ha/Downloads/Dataset/VeRi/pytorch',type=str)
-    parser.add_argument("--image-shape", default=(128,64), nargs=2, type=int)
-    parser.add_argument("--no-cuda",action="store_true")
-    parser.add_argument("--gpu-id",default=0,type=int)
-    parser.add_argument("--batch-size", default=64, type=int)
-    parser.add_argument("--lr0",default=0.1, type=float)
-    parser.add_argument('--resume', '-r',action='store_true')
-    parser.add_argument("--epochs", default=3, type=int)
-    parser.add_argument("--save-folder", default=None, type=str)
-    parser.add_argument("--pretrain", default=None, type=str)
-
-    args = parser.parse_args()
-    return args
+        save_checkpoint(
+            epoch, model, optimizer, scheduler, test_results,
+            [train_loss, train_acc], exp_path, best_metric
+        )
 
 def main():
-    args = parser_args()
-    datapath = args.data_dir
-    image_shape = args.image_shape
-    batch_size = args.batch_size
+    parser = argparse.ArgumentParser(description='Train ReID vehicle')
+    parser.add_argument('--config', type=str, default='resnet18.yml',
+                        help='configuration file in conf/')
+    args = parser.parse_args()
+    config = load_yaml(args.config)
+    datapath = config.data_dir
+    image_shape = config.image_shape
     # device
-    device = "cuda:{}".format(args.gpu_id) if torch.cuda.is_available() and not args.no_cuda \
+    device = "cuda:{}".format(config.gpu_id) if torch.cuda.is_available() and not config.no_cuda \
         else "cpu"
-    if torch.cuda.is_available() and not args.no_cuda:
+    if torch.cuda.is_available() and not config.no_cuda:
         cudnn.benchmark = True
 
     print(f'dataset:{datapath}')
+    print(f'net: {config.net}')
     print(f'image shape:{image_shape}')
-    print(f'batch size:{batch_size}')
-    print(f'Save to: {save_folder}')
     print(f'device: {device}')
-    if args.resume:
+    if config.resume:
         print('Resume training')
-    if args.pretrain is not None:
-        print(f'Pretrained weight: {args.pretrain}')
+    if config.pretrained:
+        print('Load pretrained model')
 
     print('--------------------------------')
-
 
     # Checkpoint location
     parrent_path = os.path.dirname(os.path.abspath(__file__))
     checkpoint_path = os.path.join(parrent_path, 'checkpoint')
     if not os.path.exists(checkpoint_path):
         os.makedirs(checkpoint_path)
-    if args.save_folder is None:
+    if config.save_folder is None:
         save_folder = f'exp{len(os.listdir(checkpoint_path)) + 1}'
     else:
-        save_folder = args.save_folder
+        save_folder = config.save_folder
     exp_path = os.path.join(checkpoint_path, save_folder)
 
 
     # dataloader
-    train_dir = os.path.join(datapath,"train")
-    val_dir = os.path.join(datapath,"val")
-    train_loader, val_loader = dataloader(train_dir=train_dir,
-                                          val_dir=val_dir,
-                                          image_shape=image_shape,
-                                          batch_size=batch_size)
+    train_loader, test_loader, num_query = dataloader(
+        datapath,
+        image_shape=image_shape,
+        train_batch=config.train_batch_size,
+        test_batch=config.test_batch_size,
+    )
 
     # net definition
-    net = Net(num_classes=len(train_loader.dataset.classes))
+    if config.net == 'resnet-like':
+        net = Net(num_classes=len(train_loader.dataset.classes))
+    else:
+        # Using pretrained weights doesn't really work for the VeRi dataset
+        net = Nets[config.net](num_classes=len(train_loader.dataset.classes),
+                             pretrained=config.pretrained)
 
-    # pretrain weight with VeRi dataset
-    if args.pretrain is not None:
-        net.load(args.pretrain)
     net.to(device)
 
     # loss, optimizer and scheduler
-    loss_function = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(net.parameters(), lr=args.lr0, momentum=0.9, weight_decay=5e-4)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+    criterion = torch.nn.CrossEntropyLoss()
+    miner = miners.MultiSimilarityMiner()
+    metric_loss = losses.TripletMarginLoss(margin=0.3)
+    if config.pretrained: # work very badly
+        # freeze backbone reid model
+        optimizer = torch.optim.Adam(net.fc.parameters(), lr=3.5e-6)
+        for name, param in net.named_parameters():
+            if 'fc' not in name:
+                param.requires_grad = False
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=fastReID_lr_lambda)
+        freeze = True
 
-    trainer(number_of_epoch=args.epochs,
+    else:
+        # optimizer = torch.optim.SGD(net.parameters(), lr=config.lr0, momentum=0.9, weight_decay=5e-4)
+        # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2000, gamma=0.1)
+
+        optimizer = torch.optim.SGD(net.parameters(), lr=config.lr0, momentum=0.9)
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            optimizer,
+            max_lr=config.lr0,                 # Peak learning rate
+            total_steps=len(train_loader) * config.epochs,  # Total batches across all epochs
+            pct_start=0.3,              # Warmup phase (30% of iterations)
+            anneal_strategy='cos',      # Cosine annealing
+        )
+        freeze = False
+
+    trainer(number_of_epoch=config.epochs,
             train_generator=train_loader,
-            test_generator=val_loader,
+            test_generator=test_loader,
+            num_query=num_query,
             model=net,
-            loss_function=loss_function,
+            criterion=criterion,
+            metric_loss=metric_loss,
+            miner=miner,
             optimizer=optimizer,
             scheduler=scheduler,
             exp_path=exp_path,
-            resume=args.resume)
+            resume=config.resume,
+            freeze=freeze)
 
 if __name__ == '__main__':
     main()

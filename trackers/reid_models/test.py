@@ -1,105 +1,105 @@
 import os
 import torch
+import numpy as np
 import torch.backends.cudnn as cudnn
-import torchvision
+from torchvision.datasets import ImageFolder
 import argparse
 from tqdm import tqdm
-from model import Net
-from utils.datatransform import custom_transform
+# from trackers.reid_models.resnet_like import Net
+from resnet_like import Net
+from resnet import *
+from utils.datasets import dataloader
+from utils.load_yaml import load_yaml
 
-def compute_features(model, queryloader, galleryloader):
-    # compute features
-    query_features = torch.tensor([]).float()
-    query_labels = torch.tensor([]).long()
-    gallery_features = torch.tensor([]).float()
-    gallery_labels = torch.tensor([]).long()
+Nets = {'resnet-like': Net,
+        'resnet18': resnet18, 'resnet34': resnet34, 'resnet50': resnet50, 'resnet101': resnet101,
+        'resnext50_32x4d': resnext50_32x4d, 'resnext101_32x8d': resnext101_32x8d}
+
+def compute_features(model, test_loader, num_query):
     device = model.device
+    features = torch.tensor([]).float().to(device)
+    camera_ids = torch.tensor([]).int().to(device)
+    obj_ids = torch.tensor([]).int().to(device)
+
     with torch.no_grad():
-        for (inputs,labels) in tqdm(queryloader, desc='compute query features -----'):
-            inputs = inputs.to(device)
-            features = model(inputs).cpu()
-            query_features = torch.cat((query_features, features), dim=0)
-            query_labels = torch.cat((query_labels, labels))
+        for (imgs_batch, cam_ids_batch, pids_batch) in tqdm(test_loader, desc='compute features'):
+            imgs_batch = imgs_batch.to(device)
+            cam_ids_batch = cam_ids_batch.to(device)
+            pids_batch = pids_batch.to(device)
 
-        for (inputs,labels) in tqdm(galleryloader, desc='compute gallery features ---'):
-            inputs = inputs.to(device)
-            features = model(inputs).cpu()
-            gallery_features = torch.cat((gallery_features, features), dim=0)
-            gallery_labels = torch.cat((gallery_labels, labels))
+            feats_batch = model(imgs_batch)
+            features = torch.cat((features, feats_batch), dim=0)
+            camera_ids = torch.cat((camera_ids, cam_ids_batch), dim=0)
+            obj_ids = torch.cat((obj_ids, pids_batch))
 
+    query_features = features[:num_query]
+    query_cameras = camera_ids[:num_query]
+    query_obj_ids = obj_ids[:num_query]
+
+    gallery_features = features[num_query:]
+    gallery_cameras = camera_ids[num_query:]
+    gallery_obj_ids = obj_ids[num_query:]
     features = {
-    "qf": query_features,
-    "ql": query_labels,
-    "gf": gallery_features,
-    "gl": gallery_labels
+        "qf": query_features,
+        "ql": query_obj_ids,
+        "qc": query_cameras,
+        "gf": gallery_features,
+        "gl": gallery_obj_ids,
+        "gc": gallery_cameras
     }
     return features
 
-def evaluate(features):
-    qf = features['qf']
-    ql = features['ql']
-    gf = features['gf']
-    gl = features['gl']
-    scores = qf.mm(gf.t())
-    res = scores.topk(5, dim=1)[1][:, 0]
-    top1correct = gl[res].eq(ql).sum().item()
-    return top1correct / ql.size(0)
+def main():
 
-def parser_args():
-    parser = argparse.ArgumentParser(description='Evaluate ReID model')
-    parser.add_argument('--data-dir', default='/home/ha/Downloads/Dataset/VeRi/pytorch',
-                        type=str)
-    parser.add_argument('--ckpt-folder', default='exp1-128-128', type=str,
-                        help='The checkpoint folder with weight')
-    parser.add_argument("--no-cuda",action="store_true")
-    parser.add_argument("--gpu-id",default=0,type=int)
+    parser = argparse.ArgumentParser(description='Test ReID model')
+    parser.add_argument('--config', type=str, default='resnet18.yml',
+                        help='configuration file in conf/')
     args = parser.parse_args()
-    return args
+    cfg = load_yaml(args.config)
+    data_dir = cfg.data_dir    
+    save_folder = cfg.save_folder
+    if save_folder is None:
+        print('No save folder specified')
+        return
 
-def main(args):
+    device = 'cuda:{}'.format(cfg.gpu_id) if torch.cuda.is_available() and not cfg.no_cuda else 'cpu'
+    if torch.cuda.is_available() and not cfg.no_cuda:
+        cudnn.benchmark = True
 
-    print(f'Datapath: {args.data_dir}')
-    print(f'Checkpoint: {args.ckpt_folder}')
-
-    device = 'cuda:{}'.format(args.gpu_id) if torch.cuda.is_available() and not args.no_cuda else 'cpu'
-    if torch.cuda.is_available() and not args.no_cuda:
-        cudnn.benchmark = True    
+    print(f'Datapath: {data_dir}')
+    print(f'Checkpoint: {save_folder}')
+    print(f'image shape: {cfg.image_shape}')
     print(f'Device: {device}')
 
     # dataloader
     print('Load data ....')
-    datadir = args.data_dir
-    query_dir = os.path.join(datadir, 'query')
-    gallery_dir = os.path.join(datadir, 'gallery')
-    transform = custom_transform(mode='test', target_shape=(128, 128))
-    queryloader = torch.utils.data.DataLoader(
-        torchvision.datasets.ImageFolder(query_dir, transform=transform),
-        batch_size=64,
-        shuffle=True
-    )
-    galleryloader = torch.utils.data.DataLoader(
-        torchvision.datasets.ImageFolder(gallery_dir, transform=transform),
-        batch_size=64,
-        shuffle=False
-    )
-
-    # load model
+    _, test_loader, num_query = dataloader(data_dir)
     parrent_path = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(parrent_path, 'checkpoint', args.ckpt_folder, 'ckpt.pth')
-    assert os.path.isfile(model_path), 'Checkpoint not found'
+    ckpt_path = os.path.join(parrent_path, 'checkpoint', save_folder)
+
+    
     print('Load checkpoint ....')
-    net = Net(reid=True)
-    net.load(model_path)
+    model_path = os.path.join(ckpt_path, 'ckpt.pth')
+    assert os.path.isfile(model_path), 'Checkpoint not found'
+    net = Nets[cfg.net](reid=True)
+    net.load_checkpoint(model_path)
     net.eval()
     net.to(device)
 
-    # compute features and evaluate
-    features = compute_features(model=net,
-                                galleryloader=galleryloader,
-                                queryloader=queryloader)
-    res = evaluate(features)
-    print(f'Accuracy: Rank@1 {res: .3f}')
+    # compute features
+    features = compute_features(
+        model=net,
+        test_loader=test_loader,
+        num_query=num_query
+    )
+    save_path = os.path.join(ckpt_path, 'features.pth')
+    torch.save(features, save_path)
+    print(f'Features saved to {save_path}')
+
+    # evaluate, optinally
+    from evaluate import evaluate
+    evaluate(features, metric_distance='cosine')
+    # evaluate(features, metric_distance='euclidean')
 
 if __name__ == "__main__":
-    args = parser_args()
-    main(args)
+    main()
