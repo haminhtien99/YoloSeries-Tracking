@@ -15,14 +15,14 @@ class MotChallenge2DBox(_BaseDataset):
     @staticmethod
     def get_default_dataset_config():
         """Default class config values"""
-        code_path = utils.get_code_path()
+
         default_config = {
-            'GT_FOLDER': os.path.join(code_path, 'results/data/gt/UAVDT'),  # Location of GT data
-            'TRACKERS_FOLDER': os.path.join(code_path, 'results/data/trackers/UAVDT'),  # Trackers location
+            'GT_FOLDER': 'results/data/gt/UAVDT',  # Location of GT data
+            'TRACKERS_FOLDER': 'results/data/trackers/UAVDT',  # Trackers location
             'OUTPUT_FOLDER': None,  # Where to save eval results (if None, same as TRACKERS_FOLDER)
             'TRACKERS_TO_EVAL': None,  # Filenames of trackers to eval (if None, all in folder)
             'CLASSES_TO_EVAL': ['vehicles'],
-            'BENCHMARK': 'UAVDT',  # Valid: 'VisDrone', 'UAVDT'
+            'BENCHMARK': None,  # Valid: 'VisDrone', 'UAVDT', None if None, return name of GT_FOLDER
             'SPLIT_TO_EVAL': 'val',  # Valid: 'train', 'val'
             'INPUT_AS_ZIP': False,  # Whether tracker input files are zipped
             'PRINT_CONFIG': True,  # Whether to print current config
@@ -46,6 +46,8 @@ class MotChallenge2DBox(_BaseDataset):
         # Fill non-given config values with defaults
         self.config = utils.init_config(config, self.get_default_dataset_config(), self.get_name())
 
+        if self.config['BENCHMARK'] is None:
+            self.config['BENCHMARK'] = os.path.basename(os.path.normpath(self.config['GT_FOLDER']))
         self.benchmark = self.config['BENCHMARK']
         gt_set = self.config['BENCHMARK'] + '-' + self.config['SPLIT_TO_EVAL']
         self.gt_set = gt_set

@@ -10,9 +10,13 @@ This repository contains the code for the YOLO detectors and the Multi-object tr
 and the tracker supports:
 - ByteTrack
 - BoT-SORT
-- SORT (added by me)
+- SORT
+- DeepSORT
 
-I used the [ultralytics](https://github.com/ultralytics/ultralytics), [SORT](https://github.com/abewley/sort) and [TrackEval](https://github.com/JonathonLuiten/TrackEval) repositories to do this project. Code can be customized for use on other datasets.
+In this repository, used these algorithms:
+- Detectors from [ultralytics](https://github.com/ultralytics/ultralytics)
+- Evaluation Tracking [TrackEval](https://github.com/JonathonLuiten/TrackEval)
+- Track algorithms: [SORT](https://github.com/abewley/sort), [DeepSORT](https://github.com/nwojke/deep_sort). The code for DeepSORT is not suitable for training with pytorch, so I use it from this [source](https://github.com/mikel-brostrom/Yolov3_DeepSort_Pytorch)
 
 ## Installation
 
@@ -144,7 +148,8 @@ python track.py --mot-path UAVDT-2024-MOT --splits train --track-type bytetrack.
 ```
 
 ### Evaluation tracking
-Before evaluate tracker, you need to run the following command to copy the ground truth folder of MOT-dataset to `results/data/gt`
+To easily evaluate the tracking results, move the gt folder containing the ground truth information for each dataset into the `results/data/gt` folder (MOT format). Can run the following command to copy the ground truth folder of MOT-dataset to `results/data/gt`
+
 ```
 python trackeval/prepare_gt_trackeval.py --BENCHMARK name_mot_dataset --mot_path path/to/mot_dataset
 ```
@@ -154,9 +159,27 @@ Example
 python trackeval/prepare_gt_trackeval.py --BENCHMARK UAVDT --mot_path UAVDT-2024-MOT
 ```
 
+Before evaluating, make sure the directory `results` is organized as follows
+```
+results
+|   |---data
+|   |   |---gt
+|   |   |   |---MOT-dataset-name
+|   |   |   |   |---seqmaps
+|   |   |   |   |---MOT-dataset-name-val
+|   |   |   |   |---MOT-dataset-name-train ...
+
+|   |   |---trackers
+|   |   |   |---MOT-dataset-name
+|   |   |   |   |---MOT-dataset-name-val
+|   |   |   |   |   |---tracker-name
+|   |   |   |   |   |   |---data
+|   |   |   |   |   |   |   |---track_result.txt ...
+...
+```
 Run eval
 ```
-python eval.py --BENCHMARK name_mot_dataset --TRACKERS_TO_EVAL name_tracker --SPLIT_TO_EVAL val --METRICS HOTA CLEAR Identity
+python eval.py --GT-FOLDER results/data/gt/VisDrone --TRACKERS_FOLDER results/data/trackers/VisDrone --TRACKERS_TO_EVAL deepsort --SEQ_INFO uav0000117_02622_v
 ```
 
 ## References
@@ -165,4 +188,8 @@ https://github.com/ultralytics/ultralytics
 https://github.com/JonathonLuiten/TrackEval
 
 https://github.com/abewley/sort
+
+https://github.com/mikel-brostrom/Yolov3_DeepSort_Pytorch
+
+https://github.com/nwojke/deep_sort
 
