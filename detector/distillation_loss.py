@@ -4,15 +4,18 @@ import torch
 import torch.nn.functional as F
 from ultralytics.utils.tal import make_anchors
 from ultralytics.utils.loss import v8DetectionLoss
-
+from ultralytics.nn.tasks import DetectionModel, attempt_load_one_weight
 class v8DistllationDetectionLoss(v8DetectionLoss):
-    def __init__(self, student, teacher, tal_topk=10):
+    def __init__(self, student, tal_topk=10):
         super().__init__(student, tal_topk=tal_topk)
-        self.teacher = teacher
-        self.lambda_factor = teacher.lambda_factor
-        self.temperature = teacher.temperature
+        weight, _ = attempt_load_one_weight(student.teacher_attr['path'])
+        self.teacher = DetectionModel(cfg=weight.yaml, nc=student.yaml['nc'], verbose=False)
+        self.teacher.load(weight)
+        self.teacher.eval()
+        self.lambda_factor = student.teacher_attr['lambda_factor']
+        self.temperature = student.teacher_attr['temperature']
 
-    def __call__(self, s_preds, t_preds, batch):
+    def __call__(self, s_preds, batch):
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
         loss = torch.zeros(7, device=self.device)
 
@@ -36,17 +39,6 @@ class v8DistllationDetectionLoss(v8DetectionLoss):
         s_pred_scores = s_pred_scores.permute(0, 2, 1).contiguous()
         s_pred_distri = s_pred_distri.permute(0, 2, 1).contiguous()
         s_pred_bboxes = self.bbox_decode(anchor_points, s_pred_distri)
-
-        # Teacher's features
-        t_feats = t_preds[1] if isinstance(t_preds, tuple) else t_preds
-        t_feats_concatenate = torch.cat([xi.view(batch_size, self.no, -1) for xi in t_feats], 2)
-        t_pred_distri, t_pred_scores = t_feats_concatenate.split((self.reg_max * 4, self.nc), 1)
-        t_pred_distri = t_pred_distri.permute(0, 2, 1)
-        t_pred_scores = t_pred_scores.permute(0, 2, 1)
-        # t_pred_distri.detach_()
-        # t_pred_scores.detach_()
-        t_pred_bboxes = self.bbox_decode(anchor_points, t_pred_distri)
-
 
         # Hard loss
         anc_points = anchor_points * stride_tensor
@@ -72,6 +64,19 @@ class v8DistllationDetectionLoss(v8DetectionLoss):
         loss[0] *= self.hyp.box # box gain
         loss[1] *= self.hyp.cls # cls gain
         loss[2] *= self.hyp.dfl # dfl gain
+
+
+        # Teacher's features
+        with torch.no_grad():
+            t_preds = self.teacher.forward(batch['img'])
+
+        t_feats = t_preds[1] if isinstance(t_preds, tuple) else t_preds
+        t_feats_concatenate = torch.cat([xi.view(batch_size, self.no, -1) for xi in t_feats], 2)
+        t_pred_distri, t_pred_scores = t_feats_concatenate.split((self.reg_max * 4, self.nc), 1)
+        t_pred_distri = t_pred_distri.permute(0, 2, 1)
+        t_pred_scores = t_pred_scores.permute(0, 2, 1)
+
+        t_pred_bboxes = self.bbox_decode(anchor_points, t_pred_distri)
 
         # soft loss
         t_pred_scores.sigmoid_()
@@ -100,8 +105,9 @@ class v8DistllationDetectionLoss(v8DetectionLoss):
                 fg_mask, self.temperature, loss_type='kl_div'
             )
         loss[6] *= self.lambda_factor
+
         return loss.sum() * batch_size, loss.detach()
-    # @torch.jit.script
+
     def features_distillation_loss(self, s_feats, t_feats, mask, temperature, loss_type='kl_div'):
         """Calculate the features distillation loss between student and teacher models."""
         s_feats = s_feats.permute(0, 2, 1)
@@ -117,4 +123,3 @@ class v8DistllationDetectionLoss(v8DetectionLoss):
         elif loss_type == 'kl_div':
             loss = F.kl_div(F.log_softmax(input, dim=1), F.softmax(target, dim=1), reduction='batchmean')
         return loss * (temperature **2)
-

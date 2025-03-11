@@ -1,5 +1,5 @@
 import torch
-from detector.distillation_loss import v8DistllationDetectionLoss
+from .distillation_loss import v8DistllationDetectionLoss
 
 from ultralytics.nn.tasks import DetectionModel, attempt_load_one_weight
 from ultralytics.utils import DEFAULT_CFG, RANK
@@ -8,36 +8,17 @@ from ultralytics.models import yolo
 from copy import copy
 
 class CustomModel(DetectionModel):
-    def __init__(self, cfg="yolov8n.yaml", ch=3, nc=None, verbose=True, teacher_attr=None):
+    def __init__(self, cfg="yolov8n.yaml", ch=3, nc=None, verbose=True,
+                 teacher_attr: dict=None):
         super().__init__(cfg, ch, nc, verbose)
         if teacher_attr is None:
             return
-        self.init_teacher(nc, verbose, teacher_attr)
-
-    def init_teacher(self, nc, verbose, teacher_attr):
-        weight, _ = attempt_load_one_weight(teacher_attr['path'])
-        self.teacher = DetectionModel(cfg=weight.yaml, nc=nc, verbose=verbose)
-        self.teacher.load(weight)
-        self.teacher.eval()
-
-        self.teacher.temperature = teacher_attr['temperature']
-        self.teacher.lambda_factor = teacher_attr['lambda_factor']
+        self.teacher_attr = teacher_attr
 
     def init_criterion(self):
-        if getattr(self, "teacher", None) is None:
+        if getattr(self, "teacher_attr", None) is None:
             return super().init_criterion(self)
-        return v8DistllationDetectionLoss(self, self.teacher)
-
-    def loss(self, batch, preds=None):
-        if getattr(self, 'criterion', None) is None:
-            self.criterion = self.init_criterion()
-        if getattr(self, 'teacher', None) is None:
-            preds = self.forward(batch['img']) if preds is None else preds
-            return self.criterion(preds, batch)
-        preds = self.forward(batch['img'])
-        with torch.no_grad():
-            teacher_preds = self.teacher(batch['img'])
-        return self.criterion(preds, teacher_preds, batch)
+        return v8DistllationDetectionLoss(self)
 
 class CustomTrainer(DetectionTrainer):
     """
@@ -55,22 +36,20 @@ class CustomTrainer(DetectionTrainer):
     """
     def __init__(self, cfg=DEFAULT_CFG, overrides=None, _callbacks=None, teacher_attr=None,):
         super().__init__(cfg, overrides, _callbacks)
-        if teacher_attr is None:
-            return
         self.teacher_attr = teacher_attr
 
     def get_model(self, cfg=None, weights=None, verbose=False):
-        if getattr(self, 'teacher_attr', None) is not None:
+        if self.teacher_attr is None:
+            model = DetectionModel(cfg, nc=self.data["nc"], verbose=verbose and RANK == -1)
+        else:
             model = CustomModel(cfg, nc=self.data['nc'], teacher_attr=self.teacher_attr,
                                 verbose=verbose and RANK == -1)
-        else:
-            model = DetectionModel(cfg, nc=self.data["nc"], verbose=verbose and RANK == -1)
         if weights:
             model.load(weights)
         return model
     def get_validator(self):
         """Returns a DetectionValidator for YOLO model validation."""
-        if getattr(self, 'teacher_attr', None) is None:
+        if self.teacher_attr is None:
             self.loss_names = "box_loss", "cls_loss", "dfl_loss"
         else:
             self.loss_names = "box_loss", "cls_loss", "dfl_loss", "KD_box", "KD_cls", "KD_dfl", "KD_feat"
