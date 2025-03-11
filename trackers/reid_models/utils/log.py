@@ -24,9 +24,9 @@ def plot_results(outpath: str):
     metrics = [
         ('train_loss', 'Training Loss'),
         ('train_acc', 'Training Accuracy'),
-        ('r1', 'Rank-1 Accuracy'),
-        ('mAP', 'mAP'),
-        ('mINP', 'mINP')
+        ('test_r1', 'Rank-1 Accuracy'),
+        ('test_mAP', 'mAP'),
+        ('test_mINP', 'mINP')
     ]
     
     for idx, (col, title) in enumerate(metrics):
@@ -44,14 +44,19 @@ def plot_results(outpath: str):
         axs[-1, -1].axis('off')
     
     plt.tight_layout()
-    plt.savefig(os.path.join(outpath, 'train.jpg'))
+    plt.savefig(os.path.join(outpath, 'train.png'))
     plt.close()
 
 
-def save_checkpoint(epoch, model, optimizer, scheduler, test_results, train_results, exp_path, best_metric):
-    # best_metric is Rank@1
-    if best_metric > test_results[0]:
-        best_metric = test_results[0]
+def save_checkpoint(epoch, model, optimizer, scheduler, test_results, train_results,
+                    exp_path, best_metric: float, time_from_update: int):
+    # best_metric is (Rank@1 + mAP) / 2
+    r1, mAP = test_results[0], test_results[3]
+    metric =  (r1 + mAP) / 2
+    update = False
+    if metric > best_metric:
+        best_metric = metric
+        update = True
 
     checkpoint = {
         'epoch': epoch,
@@ -60,35 +65,39 @@ def save_checkpoint(epoch, model, optimizer, scheduler, test_results, train_resu
         'scheduler_dict': scheduler.state_dict(),
         'best_metric': best_metric,
     }
-    torch.save(checkpoint, os.path.join(exp_path, 'ckpt.pth'))
+    torch.save(checkpoint, os.path.join(exp_path, 'last_ckpt.pth'))
 
     # save to train.txt
     train_loss, train_acc = train_results
     r1, r5, r10, mAP, mINP = test_results
     with open(os.path.join(exp_path, 'train.txt'), 'a') as f:
-        line = f'{epoch},{train_loss},{train_acc},{r1},{r5},{r10},{mAP},{mINP}'
+        line = f'{epoch},{train_loss},{train_acc},{r1},{r5},{r10},{mAP},{mINP}\n'
         f.write(line)
 
     # plot result
     plot_results(exp_path)
-
+    if update:
+        torch.save({'net_dict': model.state_dict()}, os.path.join(exp_path, 'best_ckpt.pth'))
+        print(f'Updated best_ckpt.pth')
+        return best_metric, 0
+    else:
+        return best_metric, time_from_update + 1
 def prepare_training(resume, model: torch.nn.Module, optimizer, scheduler, exp_path):
     best_metric = 0.
     start_epoch = 0
     if not os.path.exists(exp_path):
         os.makedirs(exp_path)
 
-    full_path = os.path.join(exp_path, 'ckpt.pth')
-
     if resume:
         # load history
+        full_path = os.path.join(exp_path, 'last_ckpt.pth')
         if os.path.exists(full_path):
             print(f'Loading checkpoint from {full_path}')
-            checkpoint = torch.load(full_path, map_location=model.device)
+            checkpoint = torch.load(full_path, map_location=model.device, weights_only=True)
             model.load_state_dict(checkpoint['net_dict'])
             start_epoch = checkpoint['epoch']
             best_metric = checkpoint['best_metric']
-            optimizer.load_state_dict(checkpoint['optimmizer_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_dict'])
             scheduler.load_state_dict(checkpoint['scheduler_dict'])
         else:
             print("Not checkpoint")
@@ -96,6 +105,7 @@ def prepare_training(resume, model: torch.nn.Module, optimizer, scheduler, exp_p
     else:
         # create checkpoint/train.txt
         with open(os.path.join(exp_path, 'train.txt'), 'w') as f:
-            line = 'epoch,train_loss,train_err,test_r1,test_r5,test_r10,test_mAP,test_mINP\n'
+            line = 'epoch,train_loss,train_acc,test_r1,test_r5,test_r10,test_mAP,test_mINP\n'
             f.write(line)
     return best_metric, start_epoch
+plot_results('/home/ha/projects/YoloSeries-Tracking/trackers/reid_models/checkpoint/resnet-like-sgd-lr-0-1')

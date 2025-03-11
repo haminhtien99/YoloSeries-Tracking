@@ -48,14 +48,14 @@ def make_layers(c_in, c_out, repeat_times, is_downsample=False):
     return nn.Sequential(*blocks)
 
 
-class Net(nn.Module):
+class ResNet_like(nn.Module):
     @property
     def device(self):
         for p in self.parameters():
             return p.device
 
-    def __init__(self, num_classes=576, reid=False):
-        super(Net, self).__init__()
+    def __init__(self, pretrained, num_classes=576, reid=False):
+        super(ResNet_like, self).__init__()
         # 3 128 64
         self.conv = nn.Sequential(
             nn.Conv2d(3, 64, 3, stride=1, padding=1),
@@ -118,6 +118,6 @@ class Net(nn.Module):
             print(f'Checkpoint not found: {weight}')
 
 if __name__ == '__main__':
-    net = Net()
+    net = ResNet_like()
     x = torch.randn(4, 3, 128, 64)
-    y = net(x)
+    y = ResNet_like(x)

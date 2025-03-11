@@ -5,22 +5,23 @@ import torch.backends.cudnn as cudnn
 from torchvision.datasets import ImageFolder
 import argparse
 from tqdm import tqdm
-# from trackers.reid_models.resnet_like import Net
-from resnet_like import Net
-from resnet import *
+import time
+
+from models import *
 from utils.datasets import dataloader
 from utils.load_yaml import load_yaml
 
-Nets = {'resnet-like': Net,
+Nets = {'resnet-like': ResNet_like,
         'resnet18': resnet18, 'resnet34': resnet34, 'resnet50': resnet50, 'resnet101': resnet101,
-        'resnext50_32x4d': resnext50_32x4d, 'resnext101_32x8d': resnext101_32x8d}
+        'osnet_x1_0': osnet_x1_0}
 
 def compute_features(model, test_loader, num_query):
     device = model.device
     features = torch.tensor([]).float().to(device)
     camera_ids = torch.tensor([]).int().to(device)
     obj_ids = torch.tensor([]).int().to(device)
-
+    
+    start = time.time()
     with torch.no_grad():
         for (imgs_batch, cam_ids_batch, pids_batch) in tqdm(test_loader, desc='compute features'):
             imgs_batch = imgs_batch.to(device)
@@ -31,7 +32,8 @@ def compute_features(model, test_loader, num_query):
             features = torch.cat((features, feats_batch), dim=0)
             camera_ids = torch.cat((camera_ids, cam_ids_batch), dim=0)
             obj_ids = torch.cat((obj_ids, pids_batch))
-
+    inference_time = (time.time() - start)/ len(camera_ids) * 1000
+    print(f'{inference_time} ms per image')
     query_features = features[:num_query]
     query_cameras = camera_ids[:num_query]
     query_obj_ids = obj_ids[:num_query]
@@ -73,15 +75,20 @@ def main():
 
     # dataloader
     print('Load data ....')
-    _, test_loader, num_query = dataloader(data_dir)
+    _, test_loader, num_query = dataloader(
+        dir=data_dir,
+        image_shape=cfg.image_shape,
+        test_batch=cfg.test_batch_size,
+        num_workers=4
+    )
     parrent_path = os.path.dirname(os.path.abspath(__file__))
     ckpt_path = os.path.join(parrent_path, 'checkpoint', save_folder)
 
     
     print('Load checkpoint ....')
-    model_path = os.path.join(ckpt_path, 'ckpt.pth')
+    model_path = os.path.join(ckpt_path, 'best_ckpt.pth')
     assert os.path.isfile(model_path), 'Checkpoint not found'
-    net = Nets[cfg.net](reid=True)
+    net = Nets[cfg.net](reid=True, pretrained=False)
     net.load_checkpoint(model_path)
     net.eval()
     net.to(device)
@@ -98,6 +105,7 @@ def main():
 
     # evaluate, optinally
     from evaluate import evaluate
+    print('Evaluate features....')
     evaluate(features, metric_distance='cosine')
     # evaluate(features, metric_distance='euclidean')
 

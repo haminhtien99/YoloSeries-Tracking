@@ -4,11 +4,10 @@ import os
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 from torchvision.transforms import functional as F
-from torchvision import transforms
 from torchvision.datasets import ImageFolder
 class CustomImageFolder(ImageFolder):
     def __getitem__(self, index):
-        path, label = self.samples[index]  # Get image path and label
+        path, _ = self.samples[index]  # Get image path and label
         image = self.loader(path)  # Load image
         if self.transform:
             image = self.transform(image)
@@ -38,13 +37,17 @@ def custom_transform(mode='train', target_shape=(128, 128)):
         ])
     return transform
 
-def dataloader(dir: str, image_shape=(128, 128), train_batch=64, test_batch=256):
+def dataloader(dir: str, image_shape=(128, 128), train_batch=64, test_batch=256,
+              num_workers=2, pin_memory=True, prefetch_factor=2):
     train_dir = os.path.join(dir, 'train')
     train_transform = custom_transform(mode='train', target_shape=image_shape)
     train_loader = torch.utils.data.DataLoader(
         torchvision.datasets.ImageFolder(train_dir, transform=train_transform),
         batch_size=train_batch,
-        shuffle=True
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        prefetch_factor=prefetch_factor
     )
 
     test_transform = custom_transform(mode='test', target_shape=image_shape)
@@ -55,7 +58,10 @@ def dataloader(dir: str, image_shape=(128, 128), train_batch=64, test_batch=256)
     test_loader = torch.utils.data.DataLoader(
         torch.utils.data.ConcatDataset([query_dataset, gallery_dataset]),
         batch_size=test_batch,
-        shuffle=False
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        prefetch_factor=prefetch_factor
     )
 
     return train_loader, test_loader, len(query_dataset)

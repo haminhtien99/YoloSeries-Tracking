@@ -3,6 +3,7 @@ import os
 
 import numpy as np
 import torch
+import time
 import torch.nn.functional as F 
 import torch.backends.cudnn as cudnn
 from pytorch_metric_learning import losses, miners
@@ -11,16 +12,21 @@ from tqdm import tqdm
 
 # from trackers.reid_models.resnet_like import Net
 # from trackers.reid_models.resnet import *
-from resnet_like import Net
-from resnet import *
+
+from models import *
+
 from evaluate import build_dist, evaluate_rank
 from utils.datasets import dataloader
 from utils.log import prepare_training, save_checkpoint
 from utils.lr_scheduler import fastReID_lr_lambda
+from utils.lr_scheduler import build_lr_scheduler
 from utils.load_yaml import load_yaml
-Nets = {'resnet-like': Net,
+
+Nets = {'resnet-like': ResNet_like,
         'resnet18': resnet18, 'resnet34': resnet34, 'resnet50': resnet50, 'resnet101': resnet101,
-        'resnext50_32x4d': resnext50_32x4d, 'resnext101_32x8d': resnext101_32x8d}
+        'osnet_x1_0': osnet_x1_0, 'osnet_x0_75': osnet_x0_75,
+        'osnet_x0_5': osnet_x0_5, 'osnet_x0_25': osnet_x0_25,
+        'osnet_ibn_x1_0': osnet_ibn_x1_0}
 
 # train
 def train_on_batch(model, x_batch, y_batch, optimizer, criterion, metric_loss=None, miner=None):
@@ -48,12 +54,12 @@ def train_on_batch(model, x_batch, y_batch, optimizer, criterion, metric_loss=No
 
 def train_on_epoch(train_generator, optimizer, scheduler: torch.optim.lr_scheduler.LambdaLR,
                    criterion, model,
-                   metric_loss=None, miner=None, freeze=False):
+                   metric_loss=None, miner=None):
     epoch_loss = 0.
     total = 0
     acc = 0.
     process_bar = tqdm(train_generator, desc='Training per epoch')
-    process_bar.set_postfix({'batch loss': np.nan, 'iter': scheduler.last_epoch, 'lr': scheduler.get_last_lr()})
+    process_bar.set_postfix({'batch loss': np.nan, 'lr': scheduler.get_last_lr()})
     for (x_batch, y_batch) in process_bar:
         batch_loss, corr = train_on_batch(
             model=model,
@@ -64,25 +70,11 @@ def train_on_epoch(train_generator, optimizer, scheduler: torch.optim.lr_schedul
             metric_loss=metric_loss,
             miner=miner
         )
-        scheduler.step()
         epoch_loss += batch_loss * len(y_batch)
         total += len(x_batch)
         acc += corr
-        process_bar.set_postfix({'batch loss': batch_loss, 'iter': scheduler.last_epoch, 'lr': scheduler.get_last_lr()[0]})
-
-        # unfreeze backbone model and reinitialize scheduler
-        iteration = scheduler.last_epoch
-        if freeze:
-            if iteration == 2000:
-                for name, param in model.named_parameters():
-                    if 'fc' not in name:
-                        param.requires_grad = True
-                optimizer.add_param_group({
-                    'params': [p for p in model.parameters() if 'fc' not in p],
-                    'lr': 3.5e-4
-                })
-                scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=fastReID_lr_lambda, last_epoch=iteration)
-            freeze = False
+        process_bar.set_postfix({'batch loss': batch_loss, 'lr': scheduler.get_last_lr()[0]})
+    scheduler.step()
     return epoch_loss/total, acc/total
 
 def test(test_loader, model, num_query, metric_distance='cosine'):
@@ -132,17 +124,18 @@ def trainer(
         num_query,
         criterion,
         optimizer,
-        scheduler,
+        scheduler: torch.optim.lr_scheduler.LambdaLR,
         exp_path: str,
+        early_stop=10,
         metric_loss=None,
         miner=None,
-        resume=False,
-        freeze=False
+        resume=False
     ):
+    time_from_update = 0
     best_metric, start_epoch = prepare_training(resume, model, optimizer, scheduler, exp_path)
-    for epoch in range(start_epoch, number_of_epoch + start_epoch):
+    for epoch in range(start_epoch, number_of_epoch):
         current_lr = scheduler.get_last_lr()[0]
-        print(f'Epoch {epoch + 1}/{number_of_epoch + start_epoch} lr: {current_lr}')
+        print(f'Epoch {epoch + 1}/{number_of_epoch} lr: {current_lr}')
         train_loss, train_acc = train_on_epoch(
             train_generator=train_generator,
             optimizer=optimizer,
@@ -150,48 +143,50 @@ def trainer(
             criterion=criterion,
             metric_loss=metric_loss,
             miner=miner,
-            model=model,
-            freeze=freeze)
+            model=model)
 
         # test
         print('Testing ...')
+        start = time.time()
         test_results = test(
             test_loader=test_generator,
             model=model,
             num_query=num_query,
             metric_distance='cosine'
         )
-        r1, mAP, mINP = test_results[0], test_results[-2], test_results[-1]
-        print(f'Rank@1:{r1:.2f}, mAP:{mAP:.2f}, mINP:{mINP:.2f}')
+        end = time.time()
+        r1, mAP, mINP = test_results[0], test_results[3], test_results[4]
+        print(f'Rank@1:{r1:.2f}, mAP:{mAP:.2f}, mINP:{mINP:.2f}, time: {(end - start):.2f}')
         # saving checkpoint
-        save_checkpoint(
+        best_metric, time_from_update = save_checkpoint(
             epoch, model, optimizer, scheduler, test_results,
-            [train_loss, train_acc], exp_path, best_metric
+            [train_loss, train_acc], exp_path, best_metric,
+            time_from_update=time_from_update
         )
+        if time_from_update >= early_stop:
+            print('Early stopping at epoch', epoch)
+            break
 
 def main():
     parser = argparse.ArgumentParser(description='Train ReID vehicle')
-    parser.add_argument('--config', type=str, default='resnet18.yml',
+    parser.add_argument('--cfg', type=str, default='resnet18.yml',
                         help='configuration file in conf/')
     args = parser.parse_args()
-    config = load_yaml(args.config)
-    datapath = config.data_dir
-    image_shape = config.image_shape
+    cfg = load_yaml(args.cfg)
+    datapath = cfg.data_dir
+    image_shape = cfg.image_shape
     # device
-    device = "cuda:{}".format(config.gpu_id) if torch.cuda.is_available() and not config.no_cuda \
+    device = "cuda:{}".format(cfg.gpu_id) if torch.cuda.is_available() and not cfg.no_cuda \
         else "cpu"
-    if torch.cuda.is_available() and not config.no_cuda:
+    if torch.cuda.is_available() and not cfg.no_cuda:
         cudnn.benchmark = True
 
     print(f'dataset:{datapath}')
-    print(f'net: {config.net}')
+    print(f'net: {cfg.net}')
     print(f'image shape:{image_shape}')
     print(f'device: {device}')
-    if config.resume:
+    if cfg.resume:
         print('Resume training')
-    if config.pretrained:
-        print('Load pretrained model')
-
     print('--------------------------------')
 
     # Checkpoint location
@@ -199,10 +194,10 @@ def main():
     checkpoint_path = os.path.join(parrent_path, 'checkpoint')
     if not os.path.exists(checkpoint_path):
         os.makedirs(checkpoint_path)
-    if config.save_folder is None:
+    if cfg.save_folder is None:
         save_folder = f'exp{len(os.listdir(checkpoint_path)) + 1}'
     else:
-        save_folder = config.save_folder
+        save_folder = cfg.save_folder
     exp_path = os.path.join(checkpoint_path, save_folder)
 
 
@@ -210,17 +205,13 @@ def main():
     train_loader, test_loader, num_query = dataloader(
         datapath,
         image_shape=image_shape,
-        train_batch=config.train_batch_size,
-        test_batch=config.test_batch_size,
+        train_batch=cfg.train_batch_size,
+        test_batch=cfg.test_batch_size,
+        num_workers=4
     )
 
     # net definition
-    if config.net == 'resnet-like':
-        net = Net(num_classes=len(train_loader.dataset.classes))
-    else:
-        # Using pretrained weights doesn't really work for the VeRi dataset
-        net = Nets[config.net](num_classes=len(train_loader.dataset.classes),
-                             pretrained=config.pretrained)
+    net = Nets[cfg.net](num_classes=len(train_loader.dataset.classes))
 
     net.to(device)
 
@@ -228,30 +219,15 @@ def main():
     criterion = torch.nn.CrossEntropyLoss()
     miner = miners.MultiSimilarityMiner()
     metric_loss = losses.TripletMarginLoss(margin=0.3)
-    if config.pretrained: # work very badly
-        # freeze backbone reid model
-        optimizer = torch.optim.Adam(net.fc.parameters(), lr=3.5e-6)
-        for name, param in net.named_parameters():
-            if 'fc' not in name:
-                param.requires_grad = False
-        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=fastReID_lr_lambda)
-        freeze = True
 
-    else:
-        # optimizer = torch.optim.SGD(net.parameters(), lr=config.lr0, momentum=0.9, weight_decay=5e-4)
-        # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2000, gamma=0.1)
+    # optimizer = torch.optim.SGD(net.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+    optimizer = torch.optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
+    # optimizer = torch.optim.Adam(net.parameters(), lr=3e-4)
+    # optimizer = torch.optim.Adam(net.parameters(), lr=3e-5, weight_decay=5e-4)
 
-        optimizer = torch.optim.SGD(net.parameters(), lr=config.lr0, momentum=0.9)
-        scheduler = torch.optim.lr_scheduler.OneCycleLR(
-            optimizer,
-            max_lr=config.lr0,                 # Peak learning rate
-            total_steps=len(train_loader) * config.epochs,  # Total batches across all epochs
-            pct_start=0.3,              # Warmup phase (30% of iterations)
-            anneal_strategy='cos',      # Cosine annealing
-        )
-        freeze = False
+    scheduler = build_lr_scheduler(optimizer, warmup=0, epochs=50, type_scheduler='cosine')
 
-    trainer(number_of_epoch=config.epochs,
+    trainer(number_of_epoch=cfg.epochs,
             train_generator=train_loader,
             test_generator=test_loader,
             num_query=num_query,
@@ -262,8 +238,7 @@ def main():
             optimizer=optimizer,
             scheduler=scheduler,
             exp_path=exp_path,
-            resume=config.resume,
-            freeze=freeze)
+            resume=cfg.resume)
 
 if __name__ == '__main__':
     main()

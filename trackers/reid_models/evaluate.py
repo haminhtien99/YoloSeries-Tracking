@@ -3,7 +3,7 @@ import torch
 import numpy as np
 import argparse
 import torch.nn.functional as F
-
+from collections import defaultdict
 def build_dist(features_1: torch.Tensor, features_2: torch.Tensor, metric_distance='cosine'):
     if metric_distance == 'cosine':
         features_1 = F.normalize(features_1, p=2, dim=1)
@@ -100,6 +100,7 @@ def evaluate(features, metric_distance='cosine', max_rank=50):
 
     print(f'Rank@1: {Rank1:.1f}, Rank5: {Rank5:.1f}, Rank10: {Rank10:.1f}')
     print(f'mAP: {mAP:.1f}, mINP: {mINP:.1f}')
+
 
 
 if __name__ == "__main__":

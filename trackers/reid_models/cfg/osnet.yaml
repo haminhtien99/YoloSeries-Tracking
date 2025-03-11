@@ -1,0 +1,10 @@
+train_batch_size: 64
+test_batch_size: 256
+net: osnet_x1_0
+data_dir: /home/ha/Downloads/Dataset/VeRi/pytorch
+image_shape: [224, 224]
+no_cuda: false
+gpu_id: 0
+resume: false
+epochs: 3
+save_folder: osnet_x1_0-Adam-cosine

@@ -1,12 +1,12 @@
 import torch
 from torchvision import transforms
 import cv2
-from .resnet_like import Net
+from .models.resnet_like import ResNet_like
 
 
 class Extractor(object):
     def __init__(self, model_path, use_cuda=True, size=(64, 64)):
-        self.net = Net(reid=True)
+        self.net = ResNet_like(reid=True)
         self.device = "cuda" if torch.cuda.is_available() and use_cuda else "cpu"
         self.net.load_checkpoint(model_path)
         self.net.to(self.device)
