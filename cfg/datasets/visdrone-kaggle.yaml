@@ -1,0 +1,5 @@
+train: /kaggle/working/VisDrone-DET/VisDrone2019-DET-train
+val: /kaggle/working/VisDrone-DET/VisDrone2019-DET-val
+test: /kaggle/working/VisDrone-DET/VisDrone2019-DET-test-dev
+nc: 4
+names: ['car', 'truck', 'bus', 'van']

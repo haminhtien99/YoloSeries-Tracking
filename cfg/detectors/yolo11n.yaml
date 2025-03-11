@@ -1,0 +1,22 @@
+# Configuration for training yolo model
+# Basic configuration
+model: detector/pretrained_weights/yolo11n.pt
+
+data: cfg/datasets/visdrone-local.yaml # file in cfg/datasets folder or absolute path to dataset configuration
+epochs: 3 # number of epochs
+batch: 4
+imgsz: 320
+device: cpu
+resume: false
+project: detector/train_results
+name: yolo11n/exp
+patience: 50 # epochs to wait for no observable improvement for early stopping of training
+
+
+# distillation knowledge training
+# path to teacher model if train distillation , otherwise set to null
+# teacher: null
+teacher:
+  path: /home/ha/Downloads/Detectors/visdrone/visdrone/yolov11x/weights/best.pt
+  temperature: 10.
+  lambda_factor: 0.5
