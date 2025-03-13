@@ -5,25 +5,34 @@ import torch.nn.functional as F
 from ultralytics.utils.tal import make_anchors
 from ultralytics.utils.loss import v8DetectionLoss
 from ultralytics.nn.tasks import DetectionModel, attempt_load_one_weight
+from tools.load_yaml import load_yaml
+from . import DEFAULT_TEACHER_CFG
+
+teacher_KD_cfg = load_yaml(DEFAULT_TEACHER_CFG, return_dict=True)
+weight, _ = attempt_load_one_weight(teacher_KD_cfg['path'])
+teacher = DetectionModel(cfg=weight.yaml, nc=teacher_KD_cfg['nc'], verbose=True)
+teacher.load(weight)
+teacher.to(teacher_KD_cfg['device'])
+teacher.eval()
+
 class v8DistllationDetectionLoss(v8DetectionLoss):
     def __init__(self, student, tal_topk=10):
         super().__init__(student, tal_topk=tal_topk)
-        weight, _ = attempt_load_one_weight(student.teacher_attr['path'])
-        self.teacher = DetectionModel(cfg=weight.yaml, nc=student.yaml['nc'], verbose=False)
-        self.teacher.load(weight)
-        self.teacher.eval()
-        self.lambda_factor = student.teacher_attr['lambda_factor']
-        self.temperature = student.teacher_attr['temperature']
+        self.lambda_factor = teacher_KD_cfg['lambda_factor']
+        self.temperature = teacher_KD_cfg['temperature']
 
     def __call__(self, s_preds, batch):
+        # Teacher's features
+        with torch.no_grad():
+            t_preds = teacher(batch['img'].to(next(teacher.parameters()).dtype))
+
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
         loss = torch.zeros(7, device=self.device)
-
         s_feats = s_preds[1] if isinstance(s_preds, tuple) else s_preds
 
         # both models have the same dtype, batch_size, imgsz, anchor_points and stride_tensor
         batch_size = s_feats[0].shape[0]
-        dtype = s_feats[0].dtype  
+        dtype = s_feats[0].dtype
         imgsz = torch.tensor(s_feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]  # image size (h,w)
         anchor_points, stride_tensor = make_anchors(s_feats, self.stride, 0.5)
 
@@ -65,10 +74,6 @@ class v8DistllationDetectionLoss(v8DetectionLoss):
         loss[1] *= self.hyp.cls # cls gain
         loss[2] *= self.hyp.dfl # dfl gain
 
-
-        # Teacher's features
-        with torch.no_grad():
-            t_preds = self.teacher.forward(batch['img'])
 
         t_feats = t_preds[1] if isinstance(t_preds, tuple) else t_preds
         t_feats_concatenate = torch.cat([xi.view(batch_size, self.no, -1) for xi in t_feats], 2)

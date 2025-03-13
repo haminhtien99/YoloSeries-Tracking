@@ -1,11 +1,22 @@
 '''train yolo series 8, 9, 10, 11'''
 import argparse
-from .custom_trainer import CustomTrainer
+
 from tools.load_yaml import load_yaml
+from . import DEFAULT_TEACHER_CFG
+import yaml
 def main(cfg):
     """ main func """
+
+    # overwrite teacher_attr to detector/teacher_cfg.yaml
     teacher_attr = cfg.pop('teacher')
-    trainer = CustomTrainer(overrides=cfg, teacher_attr=teacher_attr)
+    dataset = load_yaml(cfg['data'], return_dict=True)
+    teacher_attr['nc'] = dataset['nc']
+    teacher_attr['device'] = cfg['device']
+
+    with open(DEFAULT_TEACHER_CFG, "w") as file:
+        yaml.safe_dump(teacher_attr, file, default_flow_style=False)
+    from .custom_trainer import CustomTrainer
+    trainer = CustomTrainer(overrides=cfg, KD_training=True)
     trainer.train()
 
 

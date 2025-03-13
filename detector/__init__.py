@@ -1,0 +1,1 @@
+DEFAULT_TEACHER_CFG = 'detector/teacher_KD_cfg.yaml'
