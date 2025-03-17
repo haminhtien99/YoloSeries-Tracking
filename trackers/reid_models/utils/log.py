@@ -108,4 +108,3 @@ def prepare_training(resume, model: torch.nn.Module, optimizer, scheduler, exp_p
             line = 'epoch,train_loss,train_acc,test_r1,test_r5,test_r10,test_mAP,test_mINP\n'
             f.write(line)
     return best_metric, start_epoch
-plot_results('/home/ha/projects/YoloSeries-Tracking/trackers/reid_models/checkpoint/resnet-like-sgd-lr-0-1')

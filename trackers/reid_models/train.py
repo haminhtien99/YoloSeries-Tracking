@@ -1,6 +1,6 @@
 import argparse
 import os
-
+import gc
 import numpy as np
 import torch
 import time
@@ -29,7 +29,11 @@ Nets = {'resnet-like': ResNet_like,
         'osnet_ibn_x1_0': osnet_ibn_x1_0}
 
 # train
-def train_on_batch(model, x_batch, y_batch, optimizer, criterion, metric_loss=None, miner=None):
+def train_on_batch(
+        model,
+        x_batch, y_batch,
+        optimizer, criterion, metric_loss=None, miner=None,
+    ):
     device = model.device
     x_batch, y_batch = x_batch.to(device), y_batch.to(device)
 
@@ -52,15 +56,17 @@ def train_on_batch(model, x_batch, y_batch, optimizer, criterion, metric_loss=No
 
     return loss.cpu().item(), correct
 
-def train_on_epoch(train_generator, optimizer, scheduler: torch.optim.lr_scheduler.LambdaLR,
-                   criterion, model,
-                   metric_loss=None, miner=None):
+def train_on_epoch(
+        epoch, epochs, train_generator,
+        optimizer, scheduler: torch.optim.lr_scheduler.LambdaLR,
+        criterion, model,
+        metric_loss=None, miner=None):
     epoch_loss = 0.
     total = 0
     acc = 0.
-    process_bar = tqdm(train_generator, desc='Training per epoch')
-    process_bar.set_postfix({'batch loss': np.nan, 'lr': scheduler.get_last_lr()})
-    for (x_batch, y_batch) in process_bar:
+    print(f"{'Epoch':>11}{'GPU':>11}{'loss':>11}{'lr':>11}")
+    pbar = tqdm(train_generator)
+    for (x_batch, y_batch) in pbar:
         batch_loss, corr = train_on_batch(
             model=model,
             x_batch=x_batch,
@@ -70,11 +76,22 @@ def train_on_epoch(train_generator, optimizer, scheduler: torch.optim.lr_schedul
             metric_loss=metric_loss,
             miner=miner
         )
+        device = model.device
+
+        pbar.set_description(
+            ("%11s"*2 + "%11.4g" * 2)
+            % (
+                f"{epoch+1}/{epochs}",
+                f"{get_memory(device):>10.3g}G",
+                batch_loss,
+                scheduler.get_last_lr()[0]
+            )
+        )
         epoch_loss += batch_loss * len(y_batch)
         total += len(x_batch)
         acc += corr
-        process_bar.set_postfix({'batch loss': batch_loss, 'lr': scheduler.get_last_lr()[0]})
     scheduler.step()
+    clear_memory(device)
     return epoch_loss/total, acc/total
 
 def test(test_loader, model, num_query, metric_distance='cosine'):
@@ -83,8 +100,9 @@ def test(test_loader, model, num_query, metric_distance='cosine'):
     features = torch.tensor([]).float().to(device)
     camera_ids = torch.tensor([]).int().to(device)
     pids = torch.tensor([]).int().to(device)
+    pbar = tqdm(test_loader, desc=f"{'Time':>11}{'Rank@1':>11}{'mAP':>11}{'mINP':>11}")
     with torch.no_grad():
-        for (imgs_batch, cam_ids_batch, pids_batch) in test_loader:
+        for (imgs_batch, cam_ids_batch, pids_batch) in pbar:
             imgs_batch = imgs_batch.to(device)
             cam_ids_batch = cam_ids_batch.to(device)
             pids_batch = pids_batch.to(device)
@@ -134,8 +152,6 @@ def trainer(
     time_from_update = 0
     best_metric, start_epoch = prepare_training(resume, model, optimizer, scheduler, exp_path)
     for epoch in range(start_epoch, number_of_epoch):
-        current_lr = scheduler.get_last_lr()[0]
-        print(f'Epoch {epoch + 1}/{number_of_epoch} lr: {current_lr}')
         train_loss, train_acc = train_on_epoch(
             train_generator=train_generator,
             optimizer=optimizer,
@@ -143,10 +159,12 @@ def trainer(
             criterion=criterion,
             metric_loss=metric_loss,
             miner=miner,
-            model=model)
+            model=model,
+            epoch=epoch,
+            epochs=number_of_epoch
+        )
 
         # test
-        print('Testing ...')
         start = time.time()
         test_results = test(
             test_loader=test_generator,
@@ -156,7 +174,7 @@ def trainer(
         )
         end = time.time()
         r1, mAP, mINP = test_results[0], test_results[3], test_results[4]
-        print(f'Rank@1:{r1:.2f}, mAP:{mAP:.2f}, mINP:{mINP:.2f}, time: {(end - start):.2f}')
+        print(f"{(end - start):>11.2f}{r1:>11.2f}{mAP:>11.2f}{mINP:>11.2f}")
         # saving checkpoint
         best_metric, time_from_update = save_checkpoint(
             epoch, model, optimizer, scheduler, test_results,
@@ -167,9 +185,21 @@ def trainer(
             print('Early stopping at epoch', epoch)
             break
 
+def get_memory(device):
+    if device == 'cpu':
+        memory = 0
+    else:
+        memory = torch.cuda.memory_reserved()
+    return memory/1e9
+def clear_memory(device='cpu'):
+    gc.collect()
+    if device == 'cpu':
+        return
+    else:
+        torch.cuda.empty_cache()
 def main():
     parser = argparse.ArgumentParser(description='Train ReID vehicle')
-    parser.add_argument('--cfg', type=str, default='resnet18.yml',
+    parser.add_argument('--cfg', type=str, default='resnet18.yaml',
                         help='configuration file in conf/')
     args = parser.parse_args()
     cfg = load_yaml(args.cfg)
@@ -220,12 +250,15 @@ def main():
     miner = miners.MultiSimilarityMiner()
     metric_loss = losses.TripletMarginLoss(margin=0.3)
 
+    if cfg.optim == 'SGD':
+        optimizer = torch.optim.SGD(net.parameters(), lr=cfg.lr, momentum=0.9, weight_decay=5e-4)
+    elif cfg.optim == 'Adam':
+        optimizer = torch.optim.Adam(net.parameters(), lr=cfg.lr, weight_decay=5e-4)
     # optimizer = torch.optim.SGD(net.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
-    optimizer = torch.optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
-    # optimizer = torch.optim.Adam(net.parameters(), lr=3e-4)
-    # optimizer = torch.optim.Adam(net.parameters(), lr=3e-5, weight_decay=5e-4)
+    # optimizer = torch.optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
+    # optimizer = torch.optim.Adam(net.parameters(), lr=3e-4, weight_decay=5e-4)
 
-    scheduler = build_lr_scheduler(optimizer, warmup=0, epochs=50, type_scheduler='cosine')
+    scheduler = build_lr_scheduler(optimizer, warmup=0, epochs=50, type_scheduler=cfg.scheduler)
 
     trainer(number_of_epoch=cfg.epochs,
             train_generator=train_loader,
