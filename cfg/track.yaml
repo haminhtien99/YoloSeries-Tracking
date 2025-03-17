@@ -1,0 +1,22 @@
+# track.yml configuration file for tracking
+#dataset:
+mot_path: /home/ha/Downloads/Dataset/VisDrone2019-vehicles-MOT
+splits: val  # track on val, train or [train, val]
+all_videos: false  # true for tracking on all videos
+video: uav0000117_02622_v  # name of one video on val [train] mot-path if all_videos is False
+
+# detector
+detectors_path: /home/ha/Downloads/Detectors # path to yolo-detectors
+sub_path: visdrone
+all_weights: false  # true Track using all weights
+model_name: yolov8l  # Specific weight to use if all_weights is False
+imgsz: 640
+device: cpu  # cuda device: 0,1,2 or cpu
+
+# Tracker configuration
+tracker: sort.yaml  # deepsort.yaml, botsort.yaml or bytetrack.yaml
+
+# Output
+
+save_txt: false  # save results to file txt for evaluation
+save_img: false  # save results image with track id

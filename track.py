@@ -110,67 +110,43 @@ def track_per_model(model_name: str,
                             track_folder=track_folder, track_txt=track_txt)
 
 
-def main(args):
-    if args.all_weights:
-        all_models = os.listdir(os.path.join(args.detectors_path,
-                                             args.sub_path, args.sub_path))
+def main(cfg):
+    if cfg.all_weights:
+        all_models = os.listdir(os.path.join(cfg.detectors_path,
+                                             cfg.sub_path, cfg.sub_path))
     else:
-        all_models = [args.model_name]
+        all_models = [cfg.model_name]
 
     for model_name in all_models:
-        model_path = os.path.join(args.detectors_path,
-                                  args.sub_path, args.sub_path,
+        model_path = os.path.join(cfg.detectors_path,
+                                  cfg.sub_path, cfg.sub_path,
                                   model_name, 'weights', 'best.pt')
-        args.model_name = model_name
+        cfg.model_name = model_name
         track_per_model(model_path=model_path,
-                        **vars(args))
+                        **vars(cfg))
 
 
 if __name__ == '__main__':
+    from tools.load_yaml import load_yaml
     parser = argparse.ArgumentParser("ultralytics YOLO track parser")
-
-    parser.add_argument('--mot-path', type=str,
-                        default='/home/ha/Downloads/Dataset/VisDrone2019-vehicles-MOT',
-                        help='path to the MOT-Dataset, UAVDT or VisDrone')
-    parser.add_argument('--splits', type=str, default='val',
-                        help='track on val, train or [train, val]')
-    parser.add_argument('--all-videos', action='store_true', help='track on all videos')
-    parser.add_argument('--video', type=str, default='uav0000117_02622_v',
-                        help='name of one video on val [train] mot-path if all_videos is False')
-
-    parser.add_argument('--detectors-path', type=str, default='/home/ha/Downloads/Detectors') # yolo-detectors
-    parser.add_argument('--sub-path', type=str, default='visdrone',
-                        help='folder name, models trained on corresponding dataset')
-    parser.add_argument('--all-weights', action='store_true', help='Track using all weights')
-    parser.add_argument('--model-name', type=str, default='yolov8l',
-                        help='Specific weight to use if all_weights is False')
-    parser.add_argument('--imgsz', type=int, default=640, help='')
-    parser.add_argument('--device', type=str, default='cpu',
-                        help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
-
-    parser.add_argument('--tracker', type=str, default='sort.yaml',
-                        help='type of track, sort.yaml, botsort.yaml or bytetrack.yaml')
-
-    parser.add_argument('--save-txt', action='store_true',
-                        help='save results to file txt for evaluation')
-    parser.add_argument('--save-img', action='store_true',
-                        help='save results image with track id')
-
+    parser.add_argument('--cfg', type=str, default='track.yaml',
+                        help='path to cfg file')
     args = parser.parse_args()
-    print(f'track type: {args.tracker}')
-    print(f'detectors folder: {args.detectors_path}')
-    print(f'model trained on dataset: {args.sub_path}')
-    print(f'MOT dataset{args.mot_path}')
-    if not args.all_videos:
-        print(f'Track on {args.video}')
+    cfg = load_yaml(args.cfg)
+    print(f'track type: {cfg.tracker}')
+    print(f'detectors folder: {cfg.detectors_path}')
+    print(f'model trained on dataset: {cfg.sub_path}')
+    print(f'MOT dataset{cfg.mot_path}')
+    if not cfg.all_videos:
+        print(f'Track on {cfg.video}')
     else:
-        args.video = None
+        cfg.video = None
         print('Track on all videos')
-    if not args.all_weights:
-        print(f"Model weight: {args.model_name}")
+    if not cfg.all_weights:
+        print(f"Model weight: {cfg.model_name}")
     else:
         print("Using all weights.")
-    print(f"Image size: {args.imgsz}")
-    print(f"Device: {args.device}")
+    print(f"Image size: {cfg.imgsz}")
+    print(f"Device: {cfg.device}")
 
-    main(args)
+    main(cfg)
