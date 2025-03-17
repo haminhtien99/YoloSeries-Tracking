@@ -54,8 +54,8 @@ def compute_features(model, test_loader, num_query):
 def main():
 
     parser = argparse.ArgumentParser(description='Test ReID model')
-    parser.add_argument('--config', type=str, default='resnet18.yml',
-                        help='configuration file in conf/')
+    parser.add_argument('--cfg', type=str, default='resnet18.yml',
+                        help='configuration file in cfg/')
     args = parser.parse_args()
     cfg = load_yaml(args.config)
     data_dir = cfg.data_dir    

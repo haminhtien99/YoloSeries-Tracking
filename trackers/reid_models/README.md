@@ -33,17 +33,40 @@ pytorch/
 ## Training process - Updating ...
 
 ## Code
+Go to `reid_models`: 
+
+```bash
+cd YoloSeries-Tracking/trackers/reid_models
+```
+
+Prepare `cfg/config.yaml` like this:
+
+```yaml
+train_batch_size: 64
+test_batch_size: 256
+net: osnet_x1_0
+data_dir: /path/to/dataset/ReID
+image_shape: [224, 224]
+no_cuda: false
+gpu_id: 0
+resume: false
+epochs: 3
+save_folder: null
+optim: Adam
+lr: 0.0003
+
+```
 
 ### Train
 
-```
-python train.py --config path/to/config/file.yml
+```bash
+python train.py --cfg path/to/config/file.yml
 ```
 
 ### Test and evaluate the results
 
-```
-python test.py --config path/to/config/file.yml
+```bash
+python test.py --cfg path/to/config/file.yml
 ```
 
 ## References
