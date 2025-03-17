@@ -9,7 +9,7 @@ imgsz: 320
 device: cpu
 resume: false
 project: detector/train_results
-name: yolo11n/exp
+name: yolo11n/exp1
 patience: 50 # epochs to wait for no observable improvement for early stopping of training
 
 

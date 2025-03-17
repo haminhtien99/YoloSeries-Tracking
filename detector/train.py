@@ -6,17 +6,21 @@ from . import DEFAULT_TEACHER_CFG
 import yaml
 def main(cfg):
     """ main func """
-
-    # overwrite teacher_attr to detector/teacher_cfg.yaml
     teacher_attr = cfg.pop('teacher')
-    dataset = load_yaml(cfg['data'], return_dict=True)
-    teacher_attr['nc'] = dataset['nc']
-    teacher_attr['device'] = cfg['device']
+    if teacher_attr is None:
+        from ultralytics.models.yolo.detect import DetectionTrainer
+        trainer = DetectionTrainer(overrides=cfg)
+    else:
+        # overwrite teacher_attr to detector/teacher_cfg.yaml
+        dataset = load_yaml(cfg['data'], return_dict=True)
+        teacher_attr['nc'] = dataset['nc']
+        teacher_attr['device'] = cfg['device']
+        with open(DEFAULT_TEACHER_CFG, "w") as file:
+            yaml.safe_dump(teacher_attr, file, default_flow_style=False)
 
-    with open(DEFAULT_TEACHER_CFG, "w") as file:
-        yaml.safe_dump(teacher_attr, file, default_flow_style=False)
-    from .custom_trainer import CustomTrainer
-    trainer = CustomTrainer(overrides=cfg, KD_training=True)
+        from .custom_trainer import CustomTrainer
+        trainer = CustomTrainer(overrides=cfg)
+
     trainer.train()
 
 

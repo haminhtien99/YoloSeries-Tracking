@@ -110,13 +110,35 @@ I focused on comparing on the object of transportation. So I made some changes c
 - [VisDrone2019-DET](https://www.kaggle.com/datasets/foryolotrain1/visdrone2019-det-cars)
 - [VisDrone2019-MOT](https://www.kaggle.com/datasets/foryolotrain1/visdrone2019-mot)
 ## Detector
-### Train
+### Train KD - In progress ...
+Try knowledge distillation training method for yolo11n, hope it works
+
+Before training, prepare the training configuration like this:
+```yaml
+# Configuration for training yolo model
+model: detector/pretrained_weights/yolo11n.pt
+
+data: cfg/datasets/visdrone.yaml # file in cfg/datasets folder or absolute path to dataset configuration
+epochs: 3 # number of epochs
+batch: 32
+imgsz: 320
+device: cpu
+resume: false
+project: detector/train_results
+name: yolo11n/exp
+patience: 50 # epochs to wait for no observable improvement for early stopping of training
+
+
+# distillation knowledge training
+# path to teacher model if train distillation , otherwise set to null
+# teacher: null
+teacher:
+  path: your/path/to/trained/teacher/best.pt
+  temperature: 10.
+  lambda_factor: 0.5
 ```
-python detector/train.py --model-weight name_model.pt --data path/to/file.yaml --epochs 100 --batch 8 --device 0 --project path/to/project_name --name name_folder --imgsz 640
-```
-Example
-```
-python detector/train.py --model-weight yolov8l.pt --data config/visdrone.yaml --epochs 100 --batch 8 --device 0 --project visdrone --name yolov8l --imgsz 640
+```bash
+python -m detector.train --cfg yolo11n.yaml
 ```
 
 ### Validate
@@ -135,16 +157,10 @@ Link to them [yolo-detectors](https://www.kaggle.com/datasets/foryolotrain1/yolo
 ## Tracker
 ### Track
 
+Please create a configuration file in `cfg` folder, following the `cfg/track.yml` and run code below
+
 ```
-python track.py --mot-path path/to/mot_dataset --splits which_part_use_to_track --track-type name_tracker.yaml --detectors-path path/to/all_detectors --sub-path name/dataset/on/which/models/trained --yolo-name model_name --device 0 -batch 1
-```
-Example
-```
-python track.py --mot-path UAVDT-2024-MOT --splits train --track-type bytetrack.yaml --detectors-path yolo-detectors --sub-path uavdt --yolo-name yolov8l --device 0 -batch 1
-```
-You can save images with IDs by running the following command
-```
-python track.py --mot-path UAVDT-2024-MOT --splits train --track-type bytetrack.yaml --detectors-path yolo-detectors --sub-path uavdt --yolo-name yolov8l --device 0 -batch 1 --save-img --track-foler track_results
+python track.py --config track.yml
 ```
 
 ### Evaluation tracking
