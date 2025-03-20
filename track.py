@@ -1,80 +1,121 @@
 import os
-import numpy as np
-import time
-
-from ultralytics.models import YOLO
-
-from tqdm import tqdm
 import argparse
-from typing import List
+from tqdm import tqdm
 
-def track_per_video(model: YOLO,
-                    imgs: List|str,
-                    tracker: str,
-                    device: str|List|List[int],
-                    stream: bool, # set True if stream
-                    imgsz: int,
-                    track_folder: str|None,
-                    track_txt: str):
+from trackers import CustomTracker
+from ultralytics.models.yolo.detect import DetectionPredictor
+from ultralytics.data.loaders import LoadImagesAndVideos
+from ultralytics.utils import ASSETS
+
+
+def track_per_video(
+        imgs: str,
+        tracker: CustomTracker,
+        track_folder: str|None,
+        track_txt: str|None
+    ):
     """ tracking per video """
-    if not stream:
-        start = time.time()
-    results = model.track(source=imgs,
-                        device=device,
-                        stream=False,
-                        verbose=False,
-                        tracker=tracker,
-                        persist=True,
-                        imgsz=imgsz,
-                        batch=1)
-    if not stream:
-        summary_time = time.time() - start
-        time_per_image = summary_time / len(results)
-        print(f'Total time: {summary_time:.3f} seconds, Average time per image: {time_per_image:.3f} seconds')
-    # save results to file txt to compute evaluation tracking
-    lines = []
-    for frame_id, result in enumerate(results):
-        boxes = result.boxes.cpu().numpy()
-        # print(boxes)
-        for box in boxes:
-            xyxy = box.xyxy[0]
-            if box.id is None:
-                continue
-            track_id = box.id.item()
-            conf = box.conf.item()
-            line = f'{frame_id+1},{int(track_id)},{xyxy[0]},{xyxy[1]},{xyxy[2]-xyxy[0]},{xyxy[3]-xyxy[1]},{conf},-1,-1,-1\n'
-            lines.append(line)
-    with open(track_txt, 'w') as f:
-        f.writelines(lines)
-    print(f'save to {track_txt}')
+    dataset = LoadImagesAndVideos(path=imgs, batch=1)
+    print(f"{'GPU':>11}{'preprocess':>15}{'inference':>15}{'postprocess':>15}{'associate':>15}")
+    pbar = tqdm(dataset)
+    for i, batch in enumerate(pbar):
+        results = tracker.update(batch)
 
-    # save result images to track_folder to visualize tracking results
-    if track_folder is not None:
-        if not os.path.exists(track_folder):
-            os.makedirs(track_folder)
-        for frame_id, result in enumerate(results):    
-            result_img = os.path.join(track_folder, f'{frame_id}.jpg')
-            result.save(filename=result_img)
-    model.predictor.trackers[0].reset()
+        speed = results.speed
+        pbar.set_description(
+            ("%11s"*5)
+            % (
+                f"{results.memory:>10.3g}G",
+                f"{speed['preprocess']:>13.2f}ms",
+                f"{speed['inference']:>13.2f}ms",
+                f"{speed['postprocess']:>13.2f}ms",
+                f"{speed['associate']:>13.2f}ms"
+            )
+        )
+        # save results to file txt to compute evaluation tracking
+        if track_txt is not None:
+            lines = []
+            boxes = results.boxes.cpu().numpy()
 
+            for box in boxes:
+                xyxy = box.xyxy[0]
+                if box.id is None:
+                    continue
+                track_id = box.id.item()
+                conf = box.conf.item()
+                line = f'{i+1},{int(track_id)},{xyxy[0]},{xyxy[1]},{xyxy[2]-xyxy[0]},{xyxy[3]-xyxy[1]},{conf},-1,-1,-1\n'
+                lines.append(line)
 
-def track_per_model(model_name: str,
-                    model_path: str,
-                    mot_path: str,
-                    splits: str|list[str],
-                    video: str|None,
-                    tracker: str,
-                    imgsz: int,
-                    device: str|int|list[int],
-                    save_img: bool = False,
-                    **kwargs)-> None:
-    """ tracking per model """
+            if i == 0:
+                mode = 'w'
+            else: mode = 'a'
+            with open(track_txt, mode) as f:
+                f.writelines(lines)
+
+        # save result images to track_folder to visualize tracking results
+        if track_folder is not None:
+            if not os.path.exists(track_folder):
+                os.makedirs(track_folder)
+            dest_img = os.path.join(track_folder, f'{i}.jpg')
+            results.save(filename=dest_img)
+    if track_txt is not None:
+        print(f'save to {track_txt}')
+
+    tracker.reset()
+
+def track(
+        model_name: str,
+        model_path: str,
+        mot_path: str,
+        splits: str|list[str],
+        video: str|None,
+        tracker_cfg: str,
+        imgsz: int,
+        device: str|int,
+        save_img=False,
+        save_txt=True,
+        conf=0.25,
+        **kwargs
+    )-> None:
+    """
+    tracking per model in MOT dataset
+
+    Args:
+        model_name: yolo name- yolov8l, yolov8m, ...
+        model_path: path to weights
+        mot_path: dataset MOT
+        splits: train or val or ['train', 'val']
+        video: specific video in mot_path/splits 
+        imgsz: image size
+        device: 'cpu' or 0, 1, ...
+        save_img: save image with track id
+        save_txt: save track results for evaluating
+        conf: confidence score of detected object
+
+    """
     benchmark = 'UAVDT' if 'UAVDT' in mot_path else 'VisDrone'
-    model = YOLO(model_path)
+    args = dict(
+        model=model_path,
+        name=model_name,
+        mode='predict',
+        batch=1,
+        imgsz=imgsz,
+        conf=conf,
+        verbose=False,
+        device=device,
+        save=False
+    )
+    predictor = DetectionPredictor(overrides=args)
+
+    # warmup
+    for img in os.listdir(ASSETS):
+        predictor(os.path.join(ASSETS, img))
+
+    tracker = CustomTracker(tracker_cfg, predictor)
     if not isinstance(splits, (list, tuple)):
         splits = [splits]
     splits_set = [i for i in os.listdir(mot_path) if not i.startswith('README')]
-    track_name = tracker.split('.')[0]
+    track_name = tracker_cfg.split('.')[0]
     print(model_name, track_name)
 
     for spl in splits:
@@ -84,31 +125,39 @@ def track_per_model(model_name: str,
             videos.sort()
         else:
             videos = [video]
-        for vid in tqdm(videos, desc=f'{track_name}/{benchmark}/{spl_set}'):
+
+        for vid in videos:
+            print(f'{track_name}/{benchmark}/{spl_set}/{vid}')
             if save_img:
                 track_folder = os.path.join('results', benchmark, f'{benchmark}-{spl}',
-                                            f'{track_name}-{model_name}-train-{sub_path}', video)
+                                            f'{track_name}-{model_name}-train-{sub_path}',
+                                            video)
                 print(f'save to {track_folder}')
             else: track_folder = None
-            sub_path = model_path.split('/')[-4]
-            full_output_path = os.path.join('results',
-                                            'data',
-                                            'trackers',
-                                            benchmark,
-                                            f'{benchmark}-{spl}',
-                                            f'{track_name}-{model_name}-train-{sub_path}',
-                                            'data')
-            if not os.path.exists(full_output_path):
-                os.makedirs(full_output_path)
-            track_txt = os.path.join(full_output_path, vid + '.txt')
-            track_per_video(model=model,
-                            imgs=os.path.join(mot_path, spl_set, vid, 'img1'),
-                            tracker=tracker,
-                            device=device,
-                            imgsz=imgsz,
-                            stream=False,
-                            track_folder=track_folder, track_txt=track_txt)
 
+            if save_txt:
+                sub_path = model_path.split('/')[-4]
+                full_output_path = os.path.join(
+                    'results',
+                    'data',
+                    'trackers',
+                    benchmark,
+                    f'{benchmark}-{spl}',
+                    f'{track_name}-{model_name}-train-{sub_path}',
+                    'data'
+                )
+                if not os.path.exists(full_output_path):
+                    os.makedirs(full_output_path)
+                track_txt = os.path.join(full_output_path, vid + '.txt')
+
+            else: track_txt = None
+
+            track_per_video(
+                imgs=os.path.join(mot_path, spl_set, vid, 'img1'),
+                tracker=tracker,
+                track_folder=track_folder,
+                track_txt=track_txt
+            )
 
 def main(cfg):
     if cfg.all_weights:
@@ -122,8 +171,7 @@ def main(cfg):
                                   cfg.sub_path, cfg.sub_path,
                                   model_name, 'weights', 'best.pt')
         cfg.model_name = model_name
-        track_per_model(model_path=model_path,
-                        **vars(cfg))
+        track(model_path=model_path, **vars(cfg))
 
 
 if __name__ == '__main__':
@@ -133,7 +181,7 @@ if __name__ == '__main__':
                         help='path to cfg file')
     args = parser.parse_args()
     cfg = load_yaml(args.cfg)
-    print(f'track type: {cfg.tracker}')
+    print(f'track type: {cfg.tracker_cfg}')
     print(f'detectors folder: {cfg.detectors_path}')
     print(f'model trained on dataset: {cfg.sub_path}')
     print(f'MOT dataset{cfg.mot_path}')
