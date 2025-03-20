@@ -596,11 +596,9 @@ class Model(nn.Module):
             - Batch size is set to 1 for tracking in videos.
         """
         if not hasattr(self.predictor, "trackers"):
-            # from ultralytics.trackers import register_tracker
-            # register_tracker(self, persist)
+            from ultralytics.trackers import register_tracker
 
-            from trackers import register_custom_tracker
-            register_custom_tracker(self, persist)
+            register_tracker(self, persist)
         kwargs["conf"] = kwargs.get("conf") or 0.1  # ByteTrack-based method needs low confidence predictions as input
         kwargs["batch"] = kwargs.get("batch") or 1  # batch-size 1 for tracking in videos
         kwargs["mode"] = "track"
