@@ -4,29 +4,17 @@ import gc
 import numpy as np
 import torch
 import time
-import torch.nn.functional as F 
 import torch.backends.cudnn as cudnn
 from pytorch_metric_learning import losses, miners
 from tqdm import tqdm
 
-
-# from trackers.reid_models.resnet_like import Net
-# from trackers.reid_models.resnet import *
-
-from models import *
-
+from models import Nets
 from evaluate import build_dist, evaluate_rank
 from utils.datasets import dataloader
 from utils.log import prepare_training, save_checkpoint
-from utils.lr_scheduler import fastReID_lr_lambda
 from utils.lr_scheduler import build_lr_scheduler
 from utils.load_yaml import load_yaml
 
-Nets = {'resnet-like': ResNet_like,
-        'resnet18': resnet18, 'resnet34': resnet34, 'resnet50': resnet50, 'resnet101': resnet101,
-        'osnet_x1_0': osnet_x1_0, 'osnet_x0_75': osnet_x0_75,
-        'osnet_x0_5': osnet_x0_5, 'osnet_x0_25': osnet_x0_25,
-        'osnet_ibn_x1_0': osnet_ibn_x1_0}
 
 # train
 def train_on_batch(

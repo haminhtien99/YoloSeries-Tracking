@@ -438,7 +438,8 @@ class OSNet(nn.Module):
         if weight is None:
             return
         if not os.path.exists(weight):
-            weight = os.path.join(os.path.dirname(os.path.abspath(__file__)), weight)
+            reid_folder = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            weight = os.path.join(reid_folder, weight)
         try:
             checkpoint = torch.load(weight, map_location='cpu', weights_only=True)
             state_dict = checkpoint['net_dict'] if 'net_dict' in checkpoint else checkpoint
