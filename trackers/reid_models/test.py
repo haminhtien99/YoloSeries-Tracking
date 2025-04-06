@@ -1,22 +1,17 @@
 import os
 import torch
-import numpy as np
 import torch.backends.cudnn as cudnn
-from torchvision.datasets import ImageFolder
 import argparse
 from tqdm import tqdm
 import time
 
-from models import *
+from models import load_model
 from utils.datasets import dataloader
 from utils.load_yaml import load_yaml
 
-Nets = {'resnet-like': ResNet_like,
-        'resnet18': resnet18, 'resnet34': resnet34, 'resnet50': resnet50, 'resnet101': resnet101,
-        'osnet_x1_0': osnet_x1_0}
-
 def compute_features(model, test_loader, num_query):
     device = model.device
+    model.eval()
     features = torch.tensor([]).float().to(device)
     camera_ids = torch.tensor([]).int().to(device)
     obj_ids = torch.tensor([]).int().to(device)
@@ -33,21 +28,22 @@ def compute_features(model, test_loader, num_query):
             camera_ids = torch.cat((camera_ids, cam_ids_batch), dim=0)
             obj_ids = torch.cat((obj_ids, pids_batch))
     inference_time = (time.time() - start)/ len(camera_ids) * 1000
-    print(f'{inference_time} ms per image')
+    print(f'{inference_time:.2f} ms per image')
     query_features = features[:num_query]
-    query_cameras = camera_ids[:num_query]
+    query_camera_ids = camera_ids[:num_query]
     query_obj_ids = obj_ids[:num_query]
 
     gallery_features = features[num_query:]
-    gallery_cameras = camera_ids[num_query:]
+    gallery_camera_ids = camera_ids[num_query:]
     gallery_obj_ids = obj_ids[num_query:]
+
     features = {
         "qf": query_features,
         "ql": query_obj_ids,
-        "qc": query_cameras,
+        "qc": query_camera_ids,
         "gf": gallery_features,
         "gl": gallery_obj_ids,
-        "gc": gallery_cameras
+        "gc": gallery_camera_ids
     }
     return features
 
@@ -56,16 +52,23 @@ def main():
     parser = argparse.ArgumentParser(description='Test ReID model')
     parser.add_argument('--cfg', type=str, default='resnet18.yml',
                         help='configuration file in cfg/')
+    parser.add_argument('--save', action='store_true')
     args = parser.parse_args()
-    cfg = load_yaml(args.config)
+    cfg = load_yaml(args.cfg)
     data_dir = cfg.data_dir    
     save_folder = cfg.save_folder
     if save_folder is None:
         print('No save folder specified')
         return
 
-    device = 'cuda:{}'.format(cfg.gpu_id) if torch.cuda.is_available() and not cfg.no_cuda else 'cpu'
-    if torch.cuda.is_available() and not cfg.no_cuda:
+    if not torch.cuda.is_available() or cfg.device == 'cpu':
+        device = 'cpu'
+    elif isinstance(cfg.device, int):
+        device = f'cuda:{cfg.device}'
+    else:
+        device = 'cuda:0'
+
+    if device != 'cpu':
         cudnn.benchmark = True
 
     print(f'Datapath: {data_dir}')
@@ -84,14 +87,11 @@ def main():
     parrent_path = os.path.dirname(os.path.abspath(__file__))
     ckpt_path = os.path.join(parrent_path, 'checkpoint', save_folder)
 
-    
+
     print('Load checkpoint ....')
     model_path = os.path.join(ckpt_path, 'best_ckpt.pth')
     assert os.path.isfile(model_path), 'Checkpoint not found'
-    net = Nets[cfg.net](reid=True, pretrained=False)
-    net.load_checkpoint(model_path)
-    net.eval()
-    net.to(device)
+    net = load_model(model_path=model_path, reid=True, feature_dim=cfg.feature_dim)
 
     # compute features
     features = compute_features(
@@ -99,9 +99,12 @@ def main():
         test_loader=test_loader,
         num_query=num_query
     )
-    save_path = os.path.join(ckpt_path, 'features.pth')
-    torch.save(features, save_path)
-    print(f'Features saved to {save_path}')
+
+    # save features (optional)
+    if args.save:
+        save_path = os.path.join(ckpt_path, 'features.pth')
+        torch.save(features, save_path)
+        print(f'Features saved to {save_path}')
 
     # evaluate, optinally
     from evaluate import evaluate

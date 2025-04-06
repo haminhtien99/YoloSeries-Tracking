@@ -126,10 +126,11 @@ class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_classes=1000, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
-                 norm_layer=None,
+                 norm_layer=None, feature_dim=128,
                  reid=False):
         super(ResNet, self).__init__()
         self.reid =reid
+        self.feature_dim = feature_dim
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer
@@ -158,7 +159,8 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2,
                                        dilate=replace_stride_with_dilation[2])
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
+        self.reducion_layer = self._make_reducion(512*block.expansion, self.feature_dim)
+        self.fc = nn.Linear(self.feature_dim, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -200,7 +202,18 @@ class ResNet(nn.Module):
                                 norm_layer=norm_layer))
 
         return nn.Sequential(*layers)
+    def _make_reducion(self, input_dim, feature_dim):
+        if feature_dim is None or input_dim == feature_dim:
+            self.feature_dim = input_dim
+            return None
+        return nn.Sequential(
+            nn.Linear(input_dim, feature_dim),
+            nn.BatchNorm1d(feature_dim),
+            nn.ReLU(inplace=True)
+        )
 
+
+        
     def _forward_impl(self, x):
         # See note [TorchScript super()]
         x = self.conv1(x)
@@ -215,6 +228,8 @@ class ResNet(nn.Module):
 
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
+        if self.reducion_layer is not None:
+            x = self.reducion_layer(x)
         if self.reid:
             return x
         logits = self.fc(x)
@@ -253,12 +268,15 @@ def _resnet(arch, block, layers, pretrained, progress, reid=False, num_classes=1
     if pretrained:
         model_dict = model.state_dict()
         parrent_path = os.path.dirname(os.path.abspath(__file__))
-        model_path = os.path.join(parrent_path, 'pretrained', arch + '.pth')
+        pretrained_folder = os.path.join(parrent_path, 'pretrained')
+        model_path = os.path.join(pretrained_folder, arch + '.pth')
         if os.path.exists(model_path):
             pretrain_dict = torch.load(model_path, map_location='cpu', weights_only=True)
-            
+
         else:
             pretrain_dict = load_state_dict_from_url(model_urls[arch], progress=progress)
+            if not os.path.exists(pretrained_folder):
+                os.makedirs(pretrained_folder)
             torch.save(pretrain_dict, model_path)
 
         pretrain_dict = {
@@ -272,7 +290,7 @@ def _resnet(arch, block, layers, pretrained, progress, reid=False, num_classes=1
     return model
 
 
-def resnet18(num_classes, pretrained=False, progress=True, reid=False,**kwargs):
+def resnet18(num_classes=1000, pretrained=False, progress=True, reid=False, feature_dim=128, **kwargs):
     r"""ResNet-18 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
 
@@ -281,11 +299,12 @@ def resnet18(num_classes, pretrained=False, progress=True, reid=False,**kwargs):
         progress (bool): If True, displays a progress bar of the download to stderr
     """
     return _resnet('resnet18', BasicBlock, [2, 2, 2, 2], pretrained, progress, reid, num_classes=num_classes,
+                   feature_dim=feature_dim,
                    **kwargs)
 
 
 
-def resnet34(num_classes, pretrained=False, progress=True, reid=False, **kwargs):
+def resnet34(num_classes=1000, pretrained=False, progress=True, reid=False, feature_dim=128, **kwargs):
     r"""ResNet-34 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
 
@@ -294,11 +313,12 @@ def resnet34(num_classes, pretrained=False, progress=True, reid=False, **kwargs)
         progress (bool): If True, displays a progress bar of the download to stderr
     """
     return _resnet('resnet34', BasicBlock, [3, 4, 6, 3], pretrained, progress, reid, num_classes=num_classes,
+                   feature_dim=feature_dim,
                    **kwargs)
 
 
 
-def resnet50(pretrained=False, progress=True, reid=False, num_classes=1000, **kwargs):
+def resnet50(pretrained=False, progress=True, reid=False, num_classes=1000, feature_dim=128, **kwargs):
     r"""ResNet-50 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
 
@@ -307,12 +327,12 @@ def resnet50(pretrained=False, progress=True, reid=False, num_classes=1000, **kw
         progress (bool): If True, displays a progress bar of the download to stderr
     """
     return _resnet('resnet50', Bottleneck, [3, 4, 6, 3], pretrained, progress,
-                   reid, num_classes=num_classes,
+                   reid, num_classes=num_classes, feature_dim=feature_dim,
                    **kwargs)
 
 
 
-def resnet101(num_classes, pretrained=False, progress=True, reid=False, **kwargs):
+def resnet101(num_classes=1000, pretrained=False, progress=True, reid=False, feature_dim=128, **kwargs):
     r"""ResNet-101 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
 
@@ -321,6 +341,7 @@ def resnet101(num_classes, pretrained=False, progress=True, reid=False, **kwargs
         progress (bool): If True, displays a progress bar of the download to stderr
     """
     return _resnet('resnet101', Bottleneck, [3, 4, 23, 3], pretrained, progress, reid, num_classes=num_classes,
+                   feature_dim=feature_dim,
                    **kwargs)
 
 

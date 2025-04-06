@@ -185,6 +185,7 @@ def clear_memory(device='cpu'):
         return
     else:
         torch.cuda.empty_cache()
+
 def main():
     parser = argparse.ArgumentParser(description='Train ReID vehicle')
     parser.add_argument('--cfg', type=str, default='resnet18.yaml',
@@ -193,10 +194,16 @@ def main():
     cfg = load_yaml(args.cfg)
     datapath = cfg.data_dir
     image_shape = cfg.image_shape
+
     # device
-    device = "cuda:{}".format(cfg.gpu_id) if torch.cuda.is_available() and not cfg.no_cuda \
-        else "cpu"
-    if torch.cuda.is_available() and not cfg.no_cuda:
+    if not torch.cuda.is_available() or cfg.device == 'cpu':
+        device = 'cpu'
+    elif isinstance(cfg.device, int):
+        device = f'cuda:{cfg.device}'
+    else:
+        device = 'cuda:0'
+
+    if device != 'cpu':
         cudnn.benchmark = True
 
     print(f'dataset:{datapath}')
@@ -229,8 +236,8 @@ def main():
     )
 
     # net definition
-    net = Nets[cfg.net](num_classes=len(train_loader.dataset.classes))
-
+    net = Nets[cfg.net](num_classes=len(train_loader.dataset.classes), pretrained=cfg.pretrained, feature_dim=cfg.feature_dim)
+    net.name = cfg.net
     net.to(device)
 
     # loss, optimizer and scheduler

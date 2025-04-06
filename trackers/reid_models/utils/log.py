@@ -59,6 +59,7 @@ def save_checkpoint(epoch, model, optimizer, scheduler, test_results, train_resu
         update = True
 
     checkpoint = {
+        'name': model.name,
         'epoch': epoch,
         'net_dict': model.state_dict(),
         'optimizer_dict': optimizer.state_dict(),
@@ -77,7 +78,7 @@ def save_checkpoint(epoch, model, optimizer, scheduler, test_results, train_resu
     # plot result
     plot_results(exp_path)
     if update:
-        torch.save({'net_dict': model.state_dict()}, os.path.join(exp_path, 'best_ckpt.pth'))
+        torch.save({'name': model.name, 'net_dict': model.state_dict()}, os.path.join(exp_path, 'best_ckpt.pth'))
         print(f'Updated best_ckpt.pth')
         return best_metric, 0
     else:

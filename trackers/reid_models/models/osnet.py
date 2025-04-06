@@ -421,8 +421,8 @@ class OSNet(nn.Module):
 
     def forward(self, x, return_featuremaps=False):
         x = self.featuremaps(x)
-        if return_featuremaps:
-            return x
+        # if return_featuremaps: # remove if export to onnx model
+        #     return x
         v = self.global_avgpool(x)
         v = v.view(v.size(0), -1)
         if self.fc is not None:
@@ -538,7 +538,7 @@ def init_pretrained_weights(model, key=''):
 ##########
 # Instantiation
 ##########
-def osnet_x1_0(num_classes=1000, pretrained=True, reid=False, **kwargs):
+def osnet_x1_0(num_classes=1000, pretrained=True, reid=False, feature_dim=512, **kwargs):
     # standard size (width x1.0)
     model = OSNet(
         num_classes,
@@ -546,6 +546,7 @@ def osnet_x1_0(num_classes=1000, pretrained=True, reid=False, **kwargs):
         layers=[2, 2, 2],
         channels=[64, 256, 384, 512],
         reid=reid,
+        feature_dim=feature_dim,
         **kwargs
     )
     if pretrained:
@@ -553,7 +554,7 @@ def osnet_x1_0(num_classes=1000, pretrained=True, reid=False, **kwargs):
     return model
 
 
-def osnet_x0_75(num_classes=1000, pretrained=True, reid=False, **kwargs):
+def osnet_x0_75(num_classes=1000, pretrained=True, feature_dim=512, reid=False, **kwargs):
     # medium size (width x0.75)
     model = OSNet(
         num_classes,
@@ -561,6 +562,7 @@ def osnet_x0_75(num_classes=1000, pretrained=True, reid=False, **kwargs):
         layers=[2, 2, 2],
         channels=[48, 192, 288, 384],
         reid=reid,
+        feature_dim=feature_dim,
         **kwargs
     )
     if pretrained:
@@ -568,7 +570,7 @@ def osnet_x0_75(num_classes=1000, pretrained=True, reid=False, **kwargs):
     return model
 
 
-def osnet_x0_5(num_classes=1000, pretrained=True, reid=False, **kwargs):
+def osnet_x0_5(num_classes=1000, pretrained=True, reid=False, feature_dim=512, **kwargs):
     # tiny size (width x0.5)
     model = OSNet(
         num_classes,
@@ -576,6 +578,7 @@ def osnet_x0_5(num_classes=1000, pretrained=True, reid=False, **kwargs):
         layers=[2, 2, 2],
         channels=[32, 128, 192, 256],
         reid=reid,
+        feature_dim=feature_dim,
         **kwargs
     )
     if pretrained:
@@ -583,14 +586,15 @@ def osnet_x0_5(num_classes=1000, pretrained=True, reid=False, **kwargs):
     return model
 
 
-def osnet_x0_25(num_classes=1000, pretrained=True, reid=False, **kwargs):
+def osnet_x0_25(num_classes=1000, pretrained=True, reid=False, feature_dim=512, **kwargs):
     # very tiny size (width x0.25)
     model = OSNet(
         num_classes,
         blocks=[OSBlock, OSBlock, OSBlock],
         layers=[2, 2, 2],
         channels=[16, 64, 96, 128],
-        reid=False,
+        reid=reid,
+        feature_dim=feature_dim,
         **kwargs
     )
     if pretrained:
@@ -599,8 +603,7 @@ def osnet_x0_25(num_classes=1000, pretrained=True, reid=False, **kwargs):
 
 
 def osnet_ibn_x1_0(
-    num_classes=1000, pretrained=True, reid=False, **kwargs
-):
+    num_classes=1000, pretrained=True, reid=False, feature_dim=512, **kwargs):
     # standard size (width x1.0) + IBN layer
     # Ref: Pan et al. Two at Once: Enhancing Learning and Generalization Capacities via IBN-Net. ECCV, 2018.
     model = OSNet(
@@ -610,6 +613,7 @@ def osnet_ibn_x1_0(
         channels=[64, 256, 384, 512],
         reid=reid,
         IN=True,
+        feature_dim=feature_dim,
         **kwargs
     )
     if pretrained:

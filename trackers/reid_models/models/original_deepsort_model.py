@@ -45,9 +45,9 @@ def make_layers(c_in,c_out,repeat_times, is_downsample=False):
             blocks += [BasicBlock(c_out,c_out),]
     return nn.Sequential(*blocks)
 
-class Net(nn.Module):
-    def __init__(self, num_classes=625 ,reid=False):
-        super(Net,self).__init__()
+class DeepSortReID(nn.Module):
+    def __init__(self, num_classes=625 ,reid=False, pretrained=False, feature_dim=None):
+        super(DeepSortReID,self).__init__()
         # 3 128 64
         self.conv = nn.Sequential(
             nn.Conv2d(3,32,3,stride=1,padding=1),
@@ -71,13 +71,13 @@ class Net(nn.Module):
             nn.BatchNorm1d(128),
             nn.ELU(inplace=True)
         )
-        # 256 1 1 
+        # 128 1 1 
         self.reid = reid
         self.batch_norm = nn.BatchNorm1d(128)
         self.classifier = nn.Sequential(
             nn.Linear(128, num_classes),
         )
-    
+
     def forward(self, x):
         x = self.conv(x)
         x = self.layer1(x)
@@ -85,20 +85,22 @@ class Net(nn.Module):
         x = self.layer3(x)
 
         x = x.view(x.size(0),-1)
+        x = self.dense[0](x)
+        raw_features = self.dense[1](x)
         if self.reid:
-            x = self.dense[0](x)
-            x = self.dense[1](x)
-            x = x.div(x.norm(p=2,dim=1,keepdim=True))
-            return x
-        x = self.dense(x)
+            return raw_features
+        features = self.dense[3](self.dense[2](raw_features))
         # B x 128
         # classifier
-        x = self.classifier(x)
-        return x
-
+        logits = self.classifier(features)
+        return logits, raw_features
+    @property
+    def device(self):
+        for p in self.parameters():
+            return p.device
 
 if __name__ == '__main__':
-    net = Net(reid=True)
+    net = DeepSortReID(reid=True)
     x = torch.randn(4,3,128,64)
     y = net(x)
     import ipdb; ipdb.set_trace()

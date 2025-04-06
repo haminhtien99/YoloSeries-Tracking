@@ -54,7 +54,7 @@ class ResNet_like(nn.Module):
         for p in self.parameters():
             return p.device
 
-    def __init__(self, pretrained=False, num_classes=576, reid=False):
+    def __init__(self, num_classes=576, reid=False, feature_dim=128, pretrained=False):
         super(ResNet_like, self).__init__()
         # 3 128 64
         self.conv = nn.Sequential(
