@@ -14,6 +14,9 @@ class ConfigObject:
     def __repr__(self) -> str:
         return str(self.__dict__)
 
+    def __str__(self):
+        return '\n'.join(f"{key}: {value}" for key, value in self.__dict__.items())
+
 def load_yaml(filename: str, return_dict=False) -> ConfigObject|Dict:
     """Load YAML configuration file into ConfigObject
     

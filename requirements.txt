@@ -10,3 +10,6 @@ requests
 psutil
 filterpy
 tqdm
+onnx
+onnxruntime
+tensorrt

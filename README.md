@@ -143,11 +143,11 @@ python -m detector.train --cfg yolo11n.yaml
 
 ### Validate
 
-```
+```bash
 python detector/val.py --detectors-path path/to/all_detectors --sub-path name/dataset/on/which/models/trained --model-name model/name --data path/to/file.yaml --device 0 -batch 1 --project val_results
 ```
 Example
-```
+```bash
 python detector/val.py --detectors-path Downloads/yolo-detectors --sub-path visdrone --model-name yolov8l --data visdrone.yaml --device 0 -batch 1 --project val_results
 ```
 ### My trained detectors
@@ -157,21 +157,27 @@ Link to them [yolo-detectors](https://www.kaggle.com/datasets/foryolotrain1/yolo
 ## Tracker
 ### Track
 
-Please create a configuration file in `cfg` folder, following the `cfg/track.yml` and run code below
+To track with custom model and sample sequences, run `track_sample.py`
+
+```bash
+python track_sample.py --tracker sort.yaml --video path/to/your/video --model path/to/your/model
 
 ```
+To track with my trained detectors and dataset VisDrone, UAVDT. Please create a configuration file in `cfg` folder, following the `cfg/track.yml` and run code below
+
+```bash
 python track.py --config track.yml
 ```
 
 ### Evaluation tracking
 To easily evaluate the tracking results, move the gt folder containing the ground truth information for each dataset into the `results/data/gt` folder (MOT format). Can run the following command to copy the ground truth folder of MOT-dataset to `results/data/gt`
 
-```
+```bash
 python trackeval/prepare_gt_trackeval.py --BENCHMARK name_mot_dataset --mot_path path/to/mot_dataset
 ```
 
 Example
-```
+```bash
 python trackeval/prepare_gt_trackeval.py --BENCHMARK UAVDT --mot_path UAVDT-2024-MOT
 ```
 
@@ -194,7 +200,7 @@ results
 ...
 ```
 Run eval
-```
+```bash
 python eval.py --GT-FOLDER results/data/gt/VisDrone --TRACKERS_FOLDER results/data/trackers/VisDrone --TRACKERS_TO_EVAL deepsort --SEQ_INFO uav0000117_02622_v
 ```
 
