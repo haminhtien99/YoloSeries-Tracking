@@ -1,0 +1,5 @@
+device: cpu
+lambda_factor: 0.5
+nc: 4
+path: /home/ha/Downloads/Detectors/visdrone/visdrone/yolov11x/weights/best.pt
+temperature: 10.0

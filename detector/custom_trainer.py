@@ -6,7 +6,7 @@ from ultralytics.models.yolo.detect import DetectionTrainer
 from ultralytics.models import yolo
 from copy import copy
 
-class CustomModel(DetectionModel):
+class CustomModelDistillation(DetectionModel):
     def init_criterion(self):
         return v8DistllationDetectionLoss(self)
 
@@ -25,7 +25,7 @@ class CustomTrainer(DetectionTrainer):
     """
 
     def get_model(self, cfg=None, weights=None, verbose=False):
-        model = CustomModel(cfg, nc=self.data['nc'], verbose=verbose and RANK == -1)
+        model = CustomModelDistillation(cfg, nc=self.data['nc'], verbose=verbose and RANK == -1)
         if weights:
             model.load(weights)
         return model
