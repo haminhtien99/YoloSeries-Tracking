@@ -15,21 +15,30 @@ def track_per_video(
         track_txt: str|None
     ):
     """ tracking per video """
+    avg_preprocess, avg_inference, avg_postprocess, avg_associate = 0., 0., 0., 0.
     dataset = LoadImagesAndVideos(path=imgs, batch=1)
     print(f"{'GPU':>11}{'preprocess':>15}{'inference':>15}{'postprocess':>15}{'associate':>15}")
     pbar = tqdm(dataset)
     for i, batch in enumerate(pbar):
         results = tracker.update(batch)
 
-        speed = results.speed
+        preprocess = results.speed['preprocess']
+        avg_preprocess += preprocess
+        inference = results.speed['inference']
+        avg_inference += inference
+        postprocess = results.speed['postprocess']
+        avg_postprocess += postprocess
+        associate = results.speed['associate']
+        avg_associate += associate
+
         pbar.set_description(
             ("%11s"*5)
             % (
                 f"{results.memory:>10.3g}G",
-                f"{speed['preprocess']:>13.2f}ms",
-                f"{speed['inference']:>13.2f}ms",
-                f"{speed['postprocess']:>13.2f}ms",
-                f"{speed['associate']:>13.2f}ms"
+                f"{preprocess:>13.2f}ms",
+                f"{inference:>13.2f}ms",
+                f"{postprocess:>13.2f}ms",
+                f"{associate:>13.2f}ms"
             )
         )
         # save results to file txt to compute evaluation tracking
@@ -62,6 +71,11 @@ def track_per_video(
         print(f'save to {track_txt}')
 
     tracker.reset()
+    avg_preprocess /= (i + 1)
+    avg_inference /= (i+1)
+    avg_postprocess /= (i+1)
+    avg_associate /= (i +1)
+    return {'preprocess': avg_preprocess, 'inference': avg_inference, 'postprocess': avg_postprocess, 'associate':avg_associate}
 
 def track(
         model_name: str,
@@ -117,7 +131,7 @@ def track(
     splits_set = [i for i in os.listdir(mot_path) if not i.startswith('README')]
     track_name = tracker_cfg.split('.')[0]
     print(model_name, track_name)
-
+    times = {'preprocess': [], 'inference': [], 'postprocess': [], 'associate': []}
     for spl in splits:
         spl_set = splits_set[0] if spl in splits_set[0] else splits_set[1]
         if video is None:
@@ -152,12 +166,15 @@ def track(
 
             else: track_txt = None
 
-            track_per_video(
+            res = track_per_video(
                 imgs=os.path.join(mot_path, spl_set, vid, 'img1'),
                 tracker=tracker,
                 track_folder=track_folder,
                 track_txt=track_txt
             )
+            for key in res.keys():
+                times[key].append(res[key])
+    return times
 
 def main(cfg):
     if cfg.all_weights:
@@ -167,12 +184,32 @@ def main(cfg):
         all_models = [cfg.model_name]
 
     for model_name in all_models:
+        if cfg.format == 'onnx':
+            weight = 'best.onnx'
+        elif cfg.format == 'engine':
+            weight = 'best.engine'
+        else:
+            weight = 'best.pt'
         model_path = os.path.join(cfg.detectors_path,
                                   cfg.sub_path, cfg.sub_path,
-                                  model_name, 'weights', 'best.pt')
+                                  model_name, 'weights', weight)
+        if not os.path.exists(model_path):
+            try:
+                from ultralytics import YOLO
+                pt_weight = model_path.split('.')[0] + '.pt'
+                model = YOLO(pt_weight)
+                model.export(format=cfg.format)
+            except:
+                print(f'{model_path} not exists')
         cfg.model_name = model_name
-        track(model_path=model_path, **vars(cfg))
+        times = track(model_path=model_path, **vars(cfg))
 
+        number_vid = len(times['preprocess'])
+        time1 = sum(times['preprocess'])/number_vid
+        time2 = sum(times['inference'])/number_vid
+        time3 = sum(times['postprocess'])/number_vid
+        time4 = sum(times['associate'])/number_vid
+        print(f"{'Average':<11}{time1:13.2f}ms{time2:13.2f}ms{time3:13.2f}ms{time4:13.2f}ms")
 
 if __name__ == '__main__':
     from tools.load_yaml import load_yaml
