@@ -6,7 +6,7 @@ import numpy as np
 
 from .basetrack import TrackState
 from .byte_tracker import BYTETracker, STrack
-from .utils import matching
+from .utils import distance
 from .utils.gmc import GMC
 from .utils.kalman_filter import KalmanFilterXYWH
 
@@ -210,14 +210,14 @@ class BOTSORT(BYTETracker):
 
     def get_dists(self, tracks, detections):
         """Calculates distances between tracks and detections using IoU and optionally ReID embeddings."""
-        dists = matching.iou_distance(tracks, detections)
+        dists = distance.iou_distance(tracks, detections)
         dists_mask = dists > self.proximity_thresh
 
         if self.args.fuse_score:
-            dists = matching.fuse_score(dists, detections)
+            dists = distance.fuse_score(dists, detections)
 
         if self.args.with_reid and self.encoder is not None:
-            emb_dists = matching.embedding_distance(tracks, detections) / 2.0
+            emb_dists = distance.embedding_distance(tracks, detections) / 2.0
             emb_dists[emb_dists > self.appearance_thresh] = 1.0
             emb_dists[dists_mask] = 1.0
             dists = np.minimum(dists, emb_dists)

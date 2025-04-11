@@ -5,7 +5,7 @@ import numpy as np
 from ultralytics.utils import LOGGER
 from ultralytics.utils.ops import xywh2ltwh
 from .basetrack import BaseTrack, TrackState
-from .utils import matching
+from .utils import matching, distance
 from .utils.kalman_filter import KalmanFilterXYAH
 
 
@@ -350,7 +350,7 @@ class BYTETracker:
         detections_second = self.init_track(dets_second, scores_second, cls_second, img)
         r_tracked_stracks = [strack_pool[i] for i in u_track if strack_pool[i].state == TrackState.Tracked]
         # TODO
-        dists = matching.iou_distance(r_tracked_stracks, detections_second)
+        dists = distance.iou_distance(r_tracked_stracks, detections_second)
         matches, u_track, u_detection_second = matching.linear_assignment(dists, thresh=0.5)
         for itracked, idet in matches:
             track = r_tracked_stracks[itracked]
@@ -414,9 +414,9 @@ class BYTETracker:
 
     def get_dists(self, tracks, detections):
         """Calculates the distance between tracks and detections using IoU and optionally fuses scores."""
-        dists = matching.iou_distance(tracks, detections)
+        dists = distance.iou_distance(tracks, detections)
         if self.args.fuse_score:
-            dists = matching.fuse_score(dists, detections)
+            dists = distance.fuse_score(dists, detections)
         return dists
 
     def multi_predict(self, tracks):
@@ -461,7 +461,7 @@ class BYTETracker:
     @staticmethod
     def remove_duplicate_stracks(stracksa, stracksb):
         """Removes duplicate stracks from two lists based on Intersection over Union (IoU) distance."""
-        pdist = matching.iou_distance(stracksa, stracksb)
+        pdist = distance.iou_distance(stracksa, stracksb)
         pairs = np.where(pdist < 0.15)
         dupa, dupb = [], []
         for p, q in zip(*pairs):

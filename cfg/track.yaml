@@ -10,13 +10,15 @@ detectors_path: /home/ha/Downloads/Detectors # path to yolo-detectors
 sub_path: visdrone
 all_weights: false  # true Track using all weights
 model_name: yolov8l  # Specific weight to use if all_weights is False
+conf: 0.1
 imgsz: 640
 device: cpu  # cuda device: 0,1,2 or cpu
 
 # Tracker configuration
-tracker: sort.yaml  # deepsort.yaml, botsort.yaml or bytetrack.yaml
+tracker_cfg: deepsort.yaml  # deepsort.yaml, botsort.yaml or bytetrack.yaml
 
 # Output
 
 save_txt: false  # save results to file txt for evaluation
 save_img: false  # save results image with track id
+verbose: false  # print

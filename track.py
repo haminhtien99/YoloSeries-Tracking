@@ -74,7 +74,7 @@ def track(
         device: str|int,
         save_img=False,
         save_txt=True,
-        conf=0.25,
+        conf=0.1,
         **kwargs
     )-> None:
     """

@@ -1,13 +1,12 @@
 import numpy as np
-import torch
 from typing import List
-from .reid_models.feature_extractor import Extractor
 
+from .reid_models.feature_extractor import Extractor
 from .utils.kalman_filter import KalmanFilterXYAH
-from .utils.matching import linear_assignment, iou_distance, matching_cascade
+from .utils.matching import linear_assignment, matching_cascade
 from .utils.detection import Detection
 from .utils.non_max_suppression import non_max_suppression
-from .utils.matching import NearestNeighborDistanceMetric
+from .utils.distance import NearestNeighborDistanceMetric, iou_distance
 
 from ultralytics.engine.results import Boxes
 from ultralytics.utils.ops import xywh2ltwh, empty_like
@@ -499,33 +498,3 @@ class DeepSort(object):
     def reset(self):
         self.tracks = []
         self._next_id = 1
-
-if __name__ == '__main__':
-    from trackers.utils.load_yaml import load_yaml
-    args = load_yaml("trackers/cfg/deepsort.yaml")
-    deepsort = DeepSort(args)
-    import cv2
-    ori_img = cv2.imread("/home/ha/Downloads/Dataset/VisDrone2019-vehicles-MOT/VisDrone2019-MOT-val/uav0000117_02622_v/img1/0000001.jpg")
-    
-    # Create sample detection boxes
-    bboxes = torch.tensor([
-        [443,754,443 + 147,754+156, 0.9, 0],
-        [1490,451,1490+147,451+93, 0.7, 0],
-        [1235,388,1235+94,388+68, 0.4, 0]
-    ])
-    # Create Boxes object
-    det = Boxes(bboxes, ori_img)
-    det = det.cpu().numpy()
-    # Run the update method
-    tracks = deepsort.update(det, ori_img)
-    tracks = deepsort.update(det, ori_img)
-    tracks = deepsort.update(det, ori_img)
-    bboxes = torch.tensor([
-        [443,754,443 + 147,754+156, 0.9, 0],
-        [1490,451,1490+147,451+93, 0.7, 0]
-    ])
-    det = Boxes(bboxes, ori_img)
-    det = det.cpu().numpy()
-    tracks = deepsort.update(det, ori_img)
-
-    print(tracks)

@@ -81,7 +81,7 @@ def main(cfg):
         mode='predict',
         batch=1,
         imgsz=cfg.imgsz,
-        conf=cfg.conf,
+        conf=0.1,   # need low confidence score in some trackers
         verbose=False,
         device=cfg.device,
         save=False
@@ -105,7 +105,6 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=str, default='runs/track/exp')
     parser.add_argument('--tracker', type=str, default='deepsort.yaml')
     parser.add_argument('--imgsz', type=int, default=640)
-    parser.add_argument('--conf', type=float, default=0.25, help='confidence detection object')
     parser.add_argument('--device', default='cpu')
     cfg = parser.parse_args()
     print(f'track type: {cfg.tracker}')

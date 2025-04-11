@@ -10,11 +10,11 @@ from tools.load_yaml import load_yaml
 from .sort import Sort
 from .bot_sort import BOTSORT
 from .byte_tracker import BYTETracker
-
+from .ocsort import OCSort
 from .deep_sort import DeepSort
 
 TRACKER_MAP = {'sort': Sort, 'bytetrack': BYTETracker, 'botsort': BOTSORT,
-               'deepsort': DeepSort}
+               'deepsort': DeepSort, 'ocsort': OCSort}
 
 class CustomTracker:
     def __init__(self, tracker: str, predictor: DetectionPredictor):
@@ -24,7 +24,7 @@ class CustomTracker:
         cfg = load_yaml(tracker)
         tracker_type = cfg.tracker_type
         if tracker_type not in TRACKER_MAP.keys():
-            raise AssertionError(f"Only 'sort', 'botsort', 'bytetrack', 'deepsort'are supported for now, but got '{tracker_type}'")
+            raise AssertionError(f"Only 'sort', 'botsort', 'ocsort', 'bytetrack', 'deepsort'are supported for now, but got '{tracker_type}'")
         self.tracker = TRACKER_MAP[tracker_type](cfg, frame_rate=30)
         self.predictor = predictor
 
