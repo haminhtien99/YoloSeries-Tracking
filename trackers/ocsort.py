@@ -554,3 +554,7 @@ class OCSort(object):
         if(len(ret)>0):
             return np.concatenate(ret)
         return np.empty((0, 7))
+    def reset(self):
+        self.trackers: list[KalmanBoxTracker] = []
+        self.frame_count = 0
+        KalmanBoxTracker.count = 0
