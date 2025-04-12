@@ -12,23 +12,22 @@ and the tracker supports:
 - BoT-SORT
 - SORT
 - DeepSORT
+- OC-SORT
 
 In this repository, used these algorithms:
 - Detectors from [ultralytics](https://github.com/ultralytics/ultralytics)
 - Evaluation Tracking [TrackEval](https://github.com/JonathonLuiten/TrackEval)
-- Track algorithms: [SORT](https://github.com/abewley/sort), [DeepSORT](https://github.com/nwojke/deep_sort). The code for DeepSORT is not suitable for training with pytorch, so I use it from this [source](https://github.com/mikel-brostrom/Yolov3_DeepSort_Pytorch)
+- Track algorithms: [SORT](https://github.com/abewley/sort), [DeepSORT](https://github.com/nwojke/deep_sort). [OC-SORT](https://github.com/noahcao/OC_SORT), [ByteTrack](https://github.com/ifzhang/ByteTrack), [BoT-SORT](https://github.com/NirAharon/BoT-SORT).
 
 ## Installation
 
-python is available
-
-pytorch is available
 ```
 git clone https://github.com/haminhtien99/YoloSeries-Tracking
 ```
 Go to cloned folder
 ```
 cd YoloSeries-Tracking
+pip install -r requirements.txt
 ```
 ## Dataset preparation
 ### Dataset-DET
@@ -49,7 +48,7 @@ yolo-format for label.txt:
 ```
 Need to prepare a `.yaml` file to indicate the path to the dataset.
 ```
-train: pathh/to/train_set
+train: path/to/train_set
 val: path/to/val_set
 test: path/to/test_set
 nc: 1  # number of classes
@@ -163,10 +162,10 @@ To track with custom model and sample sequences, run `track_sample.py`
 python track_sample.py --tracker sort.yaml --video path/to/your/video --model path/to/your/model
 
 ```
-To track with my trained detectors and dataset VisDrone, UAVDT. Please create a configuration file in `cfg` folder, following the `cfg/track.yml` and run code below
+To track with my trained detectors and dataset VisDrone, UAVDT. Please create a configuration file in `cfg` folder, following the [`cfg/track.yaml`](cfg/track.yaml) and run code below
 
 ```bash
-python track.py --config track.yml
+python track.py --cfg track.yaml
 ```
 
 ### Evaluation tracking
@@ -215,3 +214,4 @@ https://github.com/mikel-brostrom/Yolov3_DeepSort_Pytorch
 
 https://github.com/nwojke/deep_sort
 
+https://github.com/noahcao/OC_SORT
