@@ -20,8 +20,8 @@ class Exporter:
             self.export_onnx(model, output)
 
         if output_type in ['trt', 'engine']:
-            input_type = model.split('.')[-1] if isinstance(model, str) else 'pt'       # 'pt' or 'onnx'
-            if input_type == 'pt':
+            input_type = model.split('.')[-1] if isinstance(model, str) else 'pth'       # 'pth' or 'onnx'
+            if input_type == 'pth':
                 print(f'Export to ONNX firstly')
                 model_onnx = '.'.join(output.split('.')[:-1]) + '.onnx'
                 self.export_onnx(model, model_onnx)
