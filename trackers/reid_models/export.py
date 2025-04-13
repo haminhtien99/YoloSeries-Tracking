@@ -20,20 +20,17 @@ class Exporter:
             self.export_onnx(model, output)
 
         if output_type in ['trt', 'engine']:
-            if isinstance(model, str):
-                input_type = model.split('.')[-1]
-                if input_type != 'onnx':
-                    raise ValueError(f'Invalid format {input_type}. Valid input ONNX')
-                self.export_engine(model, output)
-            else:
+            input_type = model.split('.')[-1] if isinstance(model, str) else 'pt'       # 'pt' or 'onnx'
+            if input_type == 'pt':
                 print(f'Export to ONNX firstly')
-                model_onnx = '.'.join(output.split('.')[:-1]) + '.engine'
+                model_onnx = '.'.join(output.split('.')[:-1]) + '.onnx'
                 self.export_onnx(model, model_onnx)
                 self.export_engine(model_onnx, output)
                 import os
                 os.remove(model_onnx)
                 print(f'removed {model_onnx} after creating {output}')
-
+            else:
+                self.export_engine(model, output)
     def export_onnx(self, model: torch.nn.Module|str, output: str):
         dynamic_axes={}
         dynamic_axes['input'] = {0: 'batch', 2: 'height', 3: 'width'}
@@ -58,7 +55,7 @@ class Exporter:
             input_names=['input'],
             output_names=['output'],
             dynamic_axes=dynamic_axes,
-            opset_version=18
+            opset_version=19
         )
         print(f'Exported to {output}')
     def export_engine(self, input_onnx: str, output: str, workspace=1):
