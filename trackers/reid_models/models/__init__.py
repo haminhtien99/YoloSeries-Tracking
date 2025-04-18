@@ -20,10 +20,13 @@ def load_model(model_path: str, reid=False, weights_only=True, feature_dim=128):
     name = ckpt['name']
     model: torch.nn.Module = Nets[name](reid=reid, pretrained=False, feature_dim=feature_dim)
     model_dict = model.state_dict()
-    state_dict = {
+    matched_state_dict = {
         k: v
         for k, v in state_dict.items()
         if k in model_dict and model_dict[k].size() == v.size()
     }
-    model.load_state_dict(state_dict, strict=False)
+    num_params_loaded = len(matched_state_dict)
+    total_params_in_ckpt = len(state_dict)
+    print(f"Loaded {num_params_loaded}/{total_params_in_ckpt} parameters from {model_path}.")
+    model.load_state_dict(matched_state_dict, strict=False)
     return model

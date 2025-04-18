@@ -186,12 +186,8 @@ def clear_memory(device='cpu'):
     else:
         torch.cuda.empty_cache()
 
-def main():
-    parser = argparse.ArgumentParser(description='Train ReID vehicle')
-    parser.add_argument('--cfg', type=str, default='resnet18.yaml',
-                        help='configuration file in conf/')
-    args = parser.parse_args()
-    cfg = load_yaml(args.cfg)
+def main(cfg):
+
     datapath = cfg.data_dir
     image_shape = cfg.image_shape
 
@@ -225,7 +221,6 @@ def main():
         save_folder = cfg.save_folder
     exp_path = os.path.join(checkpoint_path, save_folder)
 
-
     # dataloader
     train_loader, test_loader, num_query = dataloader(
         datapath,
@@ -242,8 +237,14 @@ def main():
 
     # loss, optimizer and scheduler
     criterion = torch.nn.CrossEntropyLoss()
-    miner = miners.MultiSimilarityMiner()
-    metric_loss = losses.TripletMarginLoss(margin=0.3)
+
+    # soft loss for reid task
+    if cfg.metric_loss == 'triplet':
+        metric_loss = losses.TripletMarginLoss(margin=0.3)
+        miner = miners.MultiSimilarityMiner()
+    else:
+        metric_loss = None
+        miner = None
 
     if cfg.optim == 'SGD':
         optimizer = torch.optim.SGD(net.parameters(), lr=cfg.lr, momentum=0.9, weight_decay=5e-4)
@@ -269,4 +270,9 @@ def main():
             resume=cfg.resume)
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description='Train ReID vehicle')
+    parser.add_argument('--cfg', type=str, default='resnet18.yaml',
+                        help='configuration file in conf/')
+    args = parser.parse_args()
+    cfg = load_yaml(args.cfg)
+    main(cfg)

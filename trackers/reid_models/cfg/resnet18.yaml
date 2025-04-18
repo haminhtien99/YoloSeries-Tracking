@@ -1,0 +1,15 @@
+train_batch_size: 64
+test_batch_size: 256
+net: resnet18
+feature_dim: 128
+data_dir: /home/ha/Downloads/Dataset/VeRi/pytorch
+image_shape: [224, 224]
+device: cpu
+resume: false
+epochs: 3
+save_folder: resnet-like-Adam-cosine
+optim: Adam
+lr: 0.0003
+metric_loss: null
+scheduler: cosine
+pretrained: False
