@@ -67,8 +67,6 @@ def track_per_video(
                 os.makedirs(track_folder)
             dest_img = os.path.join(track_folder, f'{i}.jpg')
             results.save(filename=dest_img)
-    if track_txt is not None:
-        print(f'save to {track_txt}')
 
     tracker.reset()
     avg_preprocess /= (i + 1)
@@ -141,7 +139,7 @@ def track(
             videos = [video]
 
         for vid in videos:
-            print(f'{track_name}/{benchmark}/{spl_set}/{vid}')
+            print(f'{spl_set}/{vid}')
             if save_img:
                 track_folder = os.path.join('results', benchmark, f'{benchmark}-{spl}',
                                             f'{track_name}-{model_name}-train-{sub_path}',
@@ -174,6 +172,8 @@ def track(
             )
             for key in res.keys():
                 times[key].append(res[key])
+        if save_txt:
+            print(f'saved text to{full_output_path}')
     return times
 
 def main(cfg):
