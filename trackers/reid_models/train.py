@@ -9,7 +9,7 @@ from pytorch_metric_learning import losses, miners
 from tqdm import tqdm
 
 from models import Nets
-from evaluate import build_dist, evaluate_rank
+from evaluate import build_dist, evaluate_rank, evaluate_rank_without_camera_id
 from utils.datasets import dataloader
 from utils.log import prepare_training, save_checkpoint
 from utils.lr_scheduler import build_lr_scheduler
@@ -109,12 +109,19 @@ def test(test_loader, model, num_query, metric_distance='cosine'):
     gallery_pids = pids[num_query:]
 
     dist = build_dist(query_features, gallery_features, metric_distance=metric_distance)
-    cmc, all_AP, all_INP = evaluate_rank(
+    if (camera_ids == -1).any().item():
+        cmc, all_AP, all_INP = evaluate_rank_without_camera_id(
         dist,
         query_pids.cpu().numpy(), gallery_pids.cpu().numpy(),
-        query_camera_ids.cpu().numpy(), gallery_camera_ids.cpu().numpy(),
         max_rank=50
-    )
+        )
+    else:
+        cmc, all_AP, all_INP = evaluate_rank(
+            dist,
+            query_pids.cpu().numpy(), gallery_pids.cpu().numpy(),
+            query_camera_ids.cpu().numpy(), gallery_camera_ids.cpu().numpy(),
+            max_rank=50
+        )
     mAP = np.mean(all_AP) * 100
     mINP = np.mean(all_INP) * 100
     rank1 = cmc[0] * 100
@@ -231,7 +238,16 @@ def main(cfg):
     )
 
     # net definition
-    net = Nets[cfg.net](num_classes=len(train_loader.dataset.classes), pretrained=cfg.pretrained, feature_dim=cfg.feature_dim)
+    net = None
+    if hasattr(cfg, 'pretrained_weight'):
+        if cfg.pretrained_weight is not None:
+            try:
+                from models import load_model
+                net = load_model(cfg.pretrained_weight, reid=False, feature_dim=cfg.feature_dim)
+            except FileNotFoundError:
+                print(f'{cfg.pretrained_weight} not found')
+    if net is None:
+        net = Nets[cfg.net](num_classes=len(train_loader.dataset.classes), pretrained=cfg.pretrained, feature_dim=cfg.feature_dim)
     net.name = cfg.net
     net.to(device)
 

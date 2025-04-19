@@ -1,14 +1,18 @@
 train_batch_size: 64
 test_batch_size: 256
 net: deepsort-reid
-data_dir: /home/ha/Downloads/Dataset/VeRi/pytorch
+data_dir: /home/ha/Downloads/Dataset/VisDrone-vehicles-ReID/pytorch
+camera_id: False
 image_shape: [128, 64]  # default image shape
 feature_dim: 128  # default feature dimension
 device: cpu
 resume: false
-epochs: 3
-save_folder: deepsort-reid-Adam-cosine
+epochs: 5
+save_folder: deepsort-reid-custom-dataset
 optim: Adam
 lr: 0.0003
 scheduler: cosine
 optim: Adam
+pretrained_weight: checkpoint/deepsort-reid-without-triplet/best_ckpt.pth
+pretrained: False
+metric_loss: null

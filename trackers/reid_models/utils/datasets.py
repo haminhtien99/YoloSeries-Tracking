@@ -13,7 +13,12 @@ class CustomImageFolder(ImageFolder):
             image = self.transform(image)
         name = os.path.basename(path)
         name = name.split('_')
-        cam_id = int(name[1][1:])
+
+        # Extract cam_id safely
+        try:
+            cam_id = int(name[1][1:]) # for dataset VeRi
+        except:
+            cam_id = -1 # for dataset VisDrone-vehicles-ReID
         pid = int(name[0])
         return image, cam_id, pid
 

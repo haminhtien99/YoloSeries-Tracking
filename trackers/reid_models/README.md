@@ -1,21 +1,39 @@
-# Train ReID model
+# 🚗 Train ReID model for Vehicle Tracking with UAV
 
-## Datasets
+## 📂 Datasets
 
-In this project, use the VeRi dataset
+There is no off-the-shelf dataset perfectly suited for this ReID task, so this project uses two datasets:
 
+### 1. VeRi Vehicle Re-Identification Dataset
 
-- [Source](https://github.com/JDAI-CV/VeRidataset)
-- The dataset is used for non-commercial purposes
-- Downloaded from another source on [kaggle](https://www.kaggle.com/datasets/abhyudaya12/veri-vehicle-re-identification-dataset)
-- To train ReID on pytorch, need to run `prepare/veri.py`
+- 🔗 [GitHub Source](https://github.com/JDAI-CV/VeRidataset)
+- ⚠️ Non-commercial use only.
+- 📥 Alternate download available on [Kaggle](https://www.kaggle.com/datasets/abhyudaya12/veri-vehicle-re-identification-dataset).
+- 🛠️ Preprocessing: run `prepare/veri.py` to format it for PyTorch training.
 
 <p align="center">
-  <img src="images/sample_VeRi.jpg" />
+  <img src="images/sample_VeRi.jpg" alt="Sample from VeRi Dataset" width="600"/>
 </p>
 
-## ReID Dataset Structure
-The dataset follows the standard ReID format, with separate splits for **training**, **validation**, and **testing**. It is organized as follows:
+---
+
+### 2. VisDrone-ReID (Custom Dataset)
+
+To adapt the model for use in **VisDrone-MOT** and **UAVDT-MOT**, we created a simplified custom dataset, **VisDrone-ReID**, based on **VisDrone-MOT**.
+
+- 🔗 [Download VisDrone-ReID from Kaggle](https://www.kaggle.com/datasets/foryolotrain1/visdrone-reid)
+- 📝 This dataset is simple but effective for ReID-based appearance models in multi-object tracking vehicles.
+
+<p align="center">
+  <img src="images/sample_VisDrone.jpg" alt="Sample from VisDrone-ReID" width="600"/>
+</p>
+
+
+---
+
+## 🗂️ ReID Dataset Structure
+
+The dataset should follow this folder structure:
 
 ```
 pytorch/
@@ -23,17 +41,25 @@ pytorch/
 ├── query/
 └── gallery/
 ```
-1. **train**
-- **No identity overlap**: There is a strict policy of **no identity overlap** between the **train**, **query/gallery** sets. This ensures that the model is evaluated on completely unseen data during testing.
 
-2. **query/gallery**
-- **`query/`**: This set contains images from **unseen identities** during training, used to query the model for retrieval tasks.
-- **`gallery/`**: Contains images for retrieval, where the model must search through and retrieve matching identities. The **identities** in the `query` and `gallery` sets are also **unseen during training** and are designed to test the model's ability to generalize to new identities.
+- `train/`: Training images with unique identities.
+- `query/`: Test images from unseen identities used to evaluate retrieval performance.
+- `gallery/`: A set of images from the same identities as `query/`, used for matching.
 
-## Training process - Updating ...
+📌 **Note**: There is **no identity overlap** between `train`, `query`, and `gallery`.
 
-## Code
-Go to `reid_models`: 
+---
+
+## 🚀 Training Process
+
+1. **Stage 1**: Train the model using the **VeRi** dataset.
+2. **Stage 2**: Fine-tune or re-train using **VisDrone-ReID** for better domain-specific performance.
+
+---
+
+## 🧠 Model Configuration & Training
+
+Navigate to the model directory:
 
 ```bash
 cd YoloSeries-Tracking/trackers/reid_models
@@ -44,32 +70,38 @@ Prepare `cfg/config.yaml` like this:
 ```yaml
 train_batch_size: 64
 test_batch_size: 256
-net: osnet_x1_0
-data_dir: /path/to/dataset/ReID
-image_shape: [224, 224]
-no_cuda: false
-gpu_id: 0
+net: deepsort-reid   # name of model
+data_dir: /path/to/your/dataset/pytorch
+camera_id: False    # set True if training on VeRi dataset, False if training on VisDrone-ReID
+image_shape: [128, 64]  # image shape
+feature_dim: 128  # feature dimension
+device: 0
 resume: false
-epochs: 3
-save_folder: null
+epochs: 5
+save_folder: deepsort-reid-custom-dataset
 optim: Adam
 lr: 0.0003
+scheduler: cosine
+optim: Adam
+pretrained_weight: null
+pretrained: False
+metric_loss: null # or 'triplet' - add TripletMarginLoss to compute loss function
 
 ```
 
-### Train
+### 🏋️‍♂️ Train the Model
 
 ```bash
 python train.py --cfg path/to/config/file.yml
 ```
 
-### Test and evaluate the results
+### 📊 Test and Evaluate
 
 ```bash
 python test.py --cfg path/to/config/file.yml
 ```
 
-## References
+## 🔗 References
 
 https://github.com/JDAI-CV/VeRidataset
 

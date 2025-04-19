@@ -1,14 +1,17 @@
 train_batch_size: 64
 test_batch_size: 256
-net: osnet_x1_0
-feature_dim: 128
+net: osnet_x0_5
+feature_dim: 512
 data_dir: /home/ha/Downloads/Dataset/VeRi/pytorch
 image_shape: [128, 128]
 device: cpu
 resume: false
-epochs: 3
-save_folder: 128-osnet_x0_25-128-Adam-cosine
+epochs: 5
+save_folder: osnet_x0_5-custom-dataset
 optim: Adam
 lr: 0.0003
 pretrained: True
 scheduler: cosine
+pretrained_weight: checkpoint/osnet_x0_5-without-triplet/best_ckpt.pth
+metric_loss: null
+pretrained: False
