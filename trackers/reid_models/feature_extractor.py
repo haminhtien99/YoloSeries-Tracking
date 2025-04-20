@@ -136,8 +136,10 @@ class Extractor(object):
             features = self._predict_onnx(im_batch)
         elif self.framework == 'tensorrt':
             features = self._predict_tensorrt(im_batch)
+        features = features.astype(np.float32)
+        norm = np.linalg.norm(features, ord=2, axis=1, keepdims=True)   #normalize
 
-        return features.astype(np.float32)
+        return features / (norm + 1e-12)  # avoid division by zero
 
     def _predict_pytorch(self, im_batch: torch.Tensor):
         with torch.no_grad():
