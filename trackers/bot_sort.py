@@ -9,7 +9,7 @@ from .byte_tracker import BYTETracker, STrack
 from .utils import distance
 from .utils.gmc import GMC
 from .utils.kalman_filter import KalmanFilterXYWH
-
+from ultralytics.utils.ops import empty_like
 
 class BOTrack(STrack):
     """
@@ -190,8 +190,8 @@ class BOTSORT(BYTETracker):
         self.appearance_thresh = args.appearance_thresh
 
         if args.with_reid:
-            # Haven't supported BoT-SORT(reid) yet
-            self.encoder = None
+            from .reid_models.feature_extractor import Extractor
+            self.encoder = Extractor(model_path=args.model_path, size=args.imgsz, device=args.device)
         self.gmc = GMC(method=args.gmc_method)
 
     def get_kalmanfilter(self):
@@ -203,10 +203,34 @@ class BOTSORT(BYTETracker):
         if len(dets) == 0:
             return []
         if self.args.with_reid and self.encoder is not None:
-            features_keep = self.encoder.inference(img, dets)
+            features_keep = self._get_features(dets, img)
             return [BOTrack(xyxy, s, c, f) for (xyxy, s, c, f) in zip(dets, scores, cls, features_keep)]  # detections
         else:
             return [BOTrack(xyxy, s, c) for (xyxy, s, c) in zip(dets, scores, cls)]  # detections
+
+    def _xywh_to_xyxy(self, dets):
+        xywh = dets[..., :4]
+        xyxy = empty_like(xywh)
+        xy = xywh[..., :2]
+        wh = xywh[..., 2:]/2
+        xyxy[..., :2] = xy - wh
+        xyxy[..., 2:] = xy + wh
+
+        return xyxy.astype(int)
+
+    def _get_features(self, dets, ori_img):
+        xyxy = self._xywh_to_xyxy(dets)
+        im_crops = []
+        ori_img = ori_img[..., ::-1]
+        for box in xyxy:
+            x1, y1, x2, y2 = box
+            im = ori_img[y1:y2, x1:x2]
+            im_crops.append(im)
+        if im_crops:
+            features = self.encoder(im_crops)
+        else:
+            features = np.array([])
+        return features
 
     def get_dists(self, tracks, detections):
         """Calculates distances between tracks and detections using IoU and optionally ReID embeddings."""
