@@ -18,9 +18,9 @@ class CustomImageFolder(ImageFolder):
         try:
             cam_id = int(name[1][1:]) # for dataset VeRi
         except:
-            cam_id = -1 # for dataset VisDrone-vehicles-ReID
-        pid = int(name[0])
-        return image, cam_id, pid
+            cam_id = -1 # for dataset without ID, like VRU
+        obj_id = int(name[0])
+        return image, cam_id, obj_id
 
 def custom_transform(mode='train', target_shape=(128, 128)):
     if mode == 'train':

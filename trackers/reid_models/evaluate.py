@@ -82,7 +82,7 @@ def evaluate_rank(distmat, q_pids, g_pids, q_camids, g_camids, max_rank):
     return all_cmc, all_AP, all_INP
 
 def evaluate_rank_without_camera_id(distmat, q_pids, g_pids, max_rank):
-    "Evaluation with Market1501 metric modified to NOT discard gallery images from the same camera."
+    "Evaluation on VRU ReID dataset"
     num_q, num_g = distmat.shape
 
     if num_g < max_rank:
