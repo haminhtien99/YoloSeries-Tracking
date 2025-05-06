@@ -13,12 +13,12 @@ Nets = {'resnet-like': ResNet_like, 'deepsort-reid': DeepSortReID,
         'osnet_x1_0': osnet_x1_0, 'osnet_x0_75': osnet_x0_75,
         'osnet_x0_5': osnet_x0_5, 'osnet_x0_25': osnet_x0_25,
         'osnet_ibn_x1_0': osnet_ibn_x1_0}
-def load_model(model_path: str, reid=False, weights_only=True, feature_dim=128):
+def load_model(model_path: str, reid=False, weights_only=True, feature_dim=128, num_classes=1000):
     import torch
     ckpt = torch.load(model_path, map_location='cpu', weights_only=weights_only)
     state_dict = ckpt['net_dict']
     name = ckpt['name']
-    model: torch.nn.Module = Nets[name](reid=reid, pretrained=False, feature_dim=feature_dim)
+    model: torch.nn.Module = Nets[name](reid=reid, pretrained=False, feature_dim=feature_dim, num_classes=num_classes)
     model_dict = model.state_dict()
     matched_state_dict = {
         k: v

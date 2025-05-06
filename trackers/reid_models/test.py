@@ -82,7 +82,8 @@ def main():
         dir=data_dir,
         image_shape=cfg.image_shape,
         test_batch=cfg.test_batch_size,
-        num_workers=4
+        num_workers=4,
+        pin_memory=False if device == 'cpu' else True
     )
     parrent_path = os.path.dirname(os.path.abspath(__file__))
     ckpt_path = os.path.join(parrent_path, 'checkpoint', save_folder)

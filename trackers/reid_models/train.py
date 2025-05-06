@@ -234,7 +234,8 @@ def main(cfg):
         image_shape=image_shape,
         train_batch=cfg.train_batch_size,
         test_batch=cfg.test_batch_size,
-        num_workers=4
+        num_workers=4,
+        pin_memory=False if device == 'cpu' else True
     )
 
     # net definition
@@ -243,7 +244,7 @@ def main(cfg):
         if cfg.pretrained_weight is not None:
             try:
                 from models import load_model
-                net = load_model(cfg.pretrained_weight, reid=False, feature_dim=cfg.feature_dim)
+                net = load_model(cfg.pretrained_weight, reid=False, feature_dim=cfg.feature_dim, num_classes=len(train_loader.dataset.classes))
             except FileNotFoundError:
                 print(f'{cfg.pretrained_weight} not found')
     if net is None:

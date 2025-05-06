@@ -2,6 +2,7 @@ import torch
 import cv2
 import numpy as np
 import torchvision.transforms as transforms
+import torch.nn.functional as F
 import tensorrt as trt
 from collections import OrderedDict, namedtuple
 from .models import load_model
@@ -118,7 +119,7 @@ class Extractor(object):
 
     def _preprocess(self, im_crops):
         def _resize(im, size):  # size := (HxW)
-            return cv2.resize(im, (size[1], size[0]))   #Swap (H, W) -> (W, H)
+            return cv2.resize(im, (size[1], size[0]))   # cv2.resize expects (width, height)
         dtype = torch.float16 if self.fp16 else torch.float32
         im_batch = torch.cat([
             self.transform(_resize(im, self.size)).unsqueeze(0) 
@@ -136,23 +137,22 @@ class Extractor(object):
             features = self._predict_onnx(im_batch)
         elif self.framework == 'tensorrt':
             features = self._predict_tensorrt(im_batch)
-        features = features.astype(np.float32)
-        norm = np.linalg.norm(features, ord=2, axis=1, keepdims=True)   #normalize
+        features = F.normalize(features.to(torch.float32), p=2, dim=1)
 
-        return features / (norm + 1e-12)  # avoid division by zero
+        return features.cpu().numpy()
 
     def _predict_pytorch(self, im_batch: torch.Tensor):
         with torch.no_grad():
             features = self.net(im_batch.to(self.device)) # raw features, without L2 normalization
-        return features.cpu().numpy()
+        return features
 
     def _predict_onnx(self, im_batch: torch.Tensor):
         features = self.net.run(None, {'input': im_batch.cpu().numpy()})  # list
-        return np.concatenate(features, axis=0)
+        return torch.from_numpy(np.concatenate(features, axis=0))
 
     def _predict_tensorrt(self, im_batch: torch.Tensor):
         im_batch = im_batch.to(self.device)
-        if self.dynamic and im_batch != self.bindings['input'].shape:
+        if self.dynamic and im_batch.shape != self.bindings['input'].shape:
             if self.is_trt10:
                 self.context.set_input_shape('input', im_batch.shape)
                 self.bindings['input'] = self.bindings['input']._replace(shape=im_batch.shape)
@@ -170,7 +170,7 @@ class Extractor(object):
         self.binding_addrs['input'] = int(im_batch.data_ptr())
         self.context.execute_v2(list(self.binding_addrs.values()))
         y = self.bindings[self.output_name].data
-        return y.cpu().numpy() if isinstance(y, torch.Tensor) else y
+        return y
 
 if __name__ == '__main__':
     import os

@@ -148,8 +148,19 @@ def evaluate(features, metric_distance='cosine', max_rank=50):
     query_labels = features['ql'].cpu().numpy()
 
     dist_matrix = build_dist(query_features, gallery_features, metric_distance=metric_distance)
-    cmc, all_AP, all_INP = evaluate_rank(dist_matrix, query_labels, gallery_labels, query_cameras, gallery_cameras,
-                                         max_rank)
+    if (query_cameras == -1).any().item():
+        cmc, all_AP, all_INP = evaluate_rank_without_camera_id(
+        dist_matrix,
+        query_labels, gallery_labels,
+        max_rank=50
+    )
+    else:
+        cmc, all_AP, all_INP = evaluate_rank(
+            dist_matrix,
+            query_labels, gallery_labels,
+            query_cameras, gallery_cameras,
+            max_rank=50
+    )
     mAP = np.mean(all_AP) * 100
     mINP = np.mean(all_INP) * 100
     Rank1 = cmc[0] * 100
