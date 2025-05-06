@@ -18,7 +18,7 @@ def track_per_video(
     ):
     """ tracking per video """
     dataset = LoadImagesAndVideos(path=imgs, batch=1)
-    print(f"{'GPU':>11}{'preprocess':>15}{'inference':>15}{'postprocess':>15}{'associate':>15}")
+    print(f"{'GPU':>11}{'preprocess':>15}{'inference':>15}{'postprocess':>15}{'matching':>15}")
     pbar = tqdm(dataset)
     for i, batch in enumerate(pbar):
         results = tracker.update(batch)
@@ -31,7 +31,7 @@ def track_per_video(
                 f"{speed['preprocess']:>13.2f}ms",
                 f"{speed['inference']:>13.2f}ms",
                 f"{speed['postprocess']:>13.2f}ms",
-                f"{speed['associate']:>13.2f}ms"
+                f"{speed['matching']:>13.2f}ms"
             )
         )
         # save results to file txt to compute evaluation tracking

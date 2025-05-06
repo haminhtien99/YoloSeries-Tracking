@@ -15,9 +15,9 @@ def track_per_video(
         track_txt: str|None
     ):
     """ tracking per video """
-    avg_preprocess, avg_inference, avg_postprocess, avg_associate = 0., 0., 0., 0.
+    avg_preprocess, avg_inference, avg_postprocess, avg_matching = 0., 0., 0., 0.
     dataset = LoadImagesAndVideos(path=imgs, batch=1)
-    print(f"{'GPU':>11}{'preprocess':>15}{'inference':>15}{'postprocess':>15}{'associate':>15}")
+    print(f"{'GPU':>11}{'preprocess':>15}{'inference':>15}{'postprocess':>15}{'matching':>15}")
     pbar = tqdm(dataset)
     for i, batch in enumerate(pbar):
         results = tracker.update(batch)
@@ -28,8 +28,8 @@ def track_per_video(
         avg_inference += inference
         postprocess = results.speed['postprocess']
         avg_postprocess += postprocess
-        associate = results.speed['associate']
-        avg_associate += associate
+        matching = results.speed['matching']
+        avg_matching += matching
 
         pbar.set_description(
             ("%11s"*5)
@@ -38,7 +38,7 @@ def track_per_video(
                 f"{preprocess:>13.2f}ms",
                 f"{inference:>13.2f}ms",
                 f"{postprocess:>13.2f}ms",
-                f"{associate:>13.2f}ms"
+                f"{matching:>13.2f}ms"
             )
         )
         # save results to file txt to compute evaluation tracking
@@ -72,8 +72,8 @@ def track_per_video(
     avg_preprocess /= (i + 1)
     avg_inference /= (i+1)
     avg_postprocess /= (i+1)
-    avg_associate /= (i +1)
-    return {'preprocess': avg_preprocess, 'inference': avg_inference, 'postprocess': avg_postprocess, 'associate':avg_associate}
+    avg_matching /= (i +1)
+    return {'preprocess': avg_preprocess, 'inference': avg_inference, 'postprocess': avg_postprocess, 'matching':avg_matching}
 
 def track(
         model_name: str,
@@ -129,7 +129,7 @@ def track(
     splits_set = [i for i in os.listdir(mot_path) if not i.startswith('README')]
     track_name = tracker_cfg.split('.')[0]
     print(model_name, track_name)
-    times = {'preprocess': [], 'inference': [], 'postprocess': [], 'associate': []}
+    times = {'preprocess': [], 'inference': [], 'postprocess': [], 'matching': []}
     for spl in splits:
         spl_set = splits_set[0] if spl in splits_set[0] else splits_set[1]
         if video is None:
@@ -208,7 +208,7 @@ def main(cfg):
         time1 = sum(times['preprocess'])/number_vid
         time2 = sum(times['inference'])/number_vid
         time3 = sum(times['postprocess'])/number_vid
-        time4 = sum(times['associate'])/number_vid
+        time4 = sum(times['matching'])/number_vid
         print(f"{'Average':<11}{time1:13.2f}ms{time2:13.2f}ms{time3:13.2f}ms{time4:13.2f}ms")
 
 if __name__ == '__main__':

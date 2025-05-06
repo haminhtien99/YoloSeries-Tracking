@@ -13,6 +13,14 @@ from .byte_tracker import BYTETracker
 from .ocsort import OCSort
 from .deep_sort import DeepSort
 
+try:
+    import pycuda.driver as cuda
+    cuda.init()
+except Exception as e:
+    print(f"PyCUDA Initialization failed: {e}")
+
+
+
 TRACKER_MAP = {'sort': Sort, 'bytetrack': BYTETracker, 'botsort': BOTSORT,
                'deepsort': DeepSort, 'ocsort': OCSort}
 
@@ -36,27 +44,33 @@ class CustomTracker:
         tracks = self.tracker.update(boxes, img[0])
         if len(tracks) == 0:
             results.memory = self._get_memory()
-            results.speed['associate'] = 0.0
+            results.speed['matching'] = 0.0
             return results
-        associate_time = (time.time() - start) * 1000
+        matching_time = (time.time() - start) * 1000
         idx = tracks[:, -1].astype(int)
-        valid_indices = idx[idx > -1]
+        valid_indices = idx[idx > -1]   # hide unmatched track-id
         results = results[valid_indices]
 
         update_args = {"boxes": torch.as_tensor(tracks[:, :-1])}
         results.update(**update_args)
         results.memory = self._get_memory()
-        results.speed['associate'] = associate_time
+        results.speed['matching'] = matching_time
         return results
 
     def reset(self):
         self.tracker.reset()
         self._clear_memory()
-    def _get_memory(self):
-        if self.predictor.device.type == 'cpu':
-            memory = 0
+
+    def _get_memory(self):  # TODO: get memory when using tenssorrt ??
+        if self.predictor.device.type == 'cuda':  # GPU only
+            # memory = torch.cuda.memory_reserved()
+            free_mem, total_mem = cuda.mem_get_info()
+            memory = total_mem - free_mem
+            return memory
+        elif self.predictor.device.type == 'mps':
+            memory = torch.mps.driver_allocated_memory()
         else:
-            memory = torch.cuda.memory_reserved()
+            memory = 0
         return memory/1e9
     def _clear_memory(self):
         gc.collect()
