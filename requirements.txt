@@ -13,3 +13,5 @@ tqdm
 onnx
 onnxruntime
 tensorrt
+pycuda
+pytorch_metric_learning
