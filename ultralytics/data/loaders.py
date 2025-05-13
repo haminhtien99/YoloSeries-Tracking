@@ -4,14 +4,13 @@ import glob
 import math
 import os
 import time
+import urllib
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Thread
-from urllib.parse import urlparse
 
 import cv2
 import numpy as np
-import requests
 import torch
 from PIL import Image
 
@@ -33,6 +32,7 @@ class SourceTypes:
         stream (bool): Flag indicating if the input source is a video stream.
         screenshot (bool): Flag indicating if the input source is a screenshot.
         from_img (bool): Flag indicating if the input source is an image file.
+        tensor (bool): Flag indicating if the input source is a tensor.
 
     Examples:
         >>> source_types = SourceTypes(stream=True, screenshot=False, from_img=False)
@@ -106,11 +106,11 @@ class LoadStreams:
         self.caps = [None] * n  # video capture objects
         self.imgs = [[] for _ in range(n)]  # images
         self.shape = [[] for _ in range(n)]  # image shapes
-        self.sources = [ops.clean_str(x) for x in sources]  # clean source names for later
+        self.sources = [ops.clean_str(x).replace(os.sep, "_") for x in sources]  # clean source names for later
         for i, s in enumerate(sources):  # index, source
             # Start thread to read frames from video stream
             st = f"{i + 1}/{n}: {s}... "
-            if urlparse(s).hostname in {"www.youtube.com", "youtube.com", "youtu.be"}:  # if source is YouTube video
+            if urllib.parse.urlparse(s).hostname in {"www.youtube.com", "youtube.com", "youtu.be"}:  # YouTube video
                 # YouTube format i.e. 'https://www.youtube.com/watch?v=Jsn8D3aC840' or 'https://youtu.be/Jsn8D3aC840'
                 s = get_best_youtube_url(s)
             s = eval(s) if s.isnumeric() else s  # i.e. s = '0' local webcam
@@ -151,7 +151,7 @@ class LoadStreams:
                     success, im = cap.retrieve()
                     if not success:
                         im = np.zeros(self.shape[i], dtype=np.uint8)
-                        LOGGER.warning("WARNING ⚠️ Video stream unresponsive, please check your IP camera connection.")
+                        LOGGER.warning("Video stream unresponsive, please check your IP camera connection.")
                         cap.open(stream)  # re-open stream if signal was lost
                     if self.buffer:
                         self.imgs[i].append(im)
@@ -170,7 +170,7 @@ class LoadStreams:
             try:
                 cap.release()  # release video capture
             except Exception as e:
-                LOGGER.warning(f"WARNING ⚠️ Could not release VideoCapture object: {e}")
+                LOGGER.warning(f"Could not release VideoCapture object: {e}")
         cv2.destroyAllWindows()
 
     def __iter__(self):
@@ -192,7 +192,7 @@ class LoadStreams:
                 time.sleep(1 / min(self.fps))
                 x = self.imgs[i]
                 if not x:
-                    LOGGER.warning(f"WARNING ⚠️ Waiting for stream {i}")
+                    LOGGER.warning(f"Waiting for stream {i}")
 
             # Get and remove the first frame from imgs buffer
             if self.buffer:
@@ -300,6 +300,7 @@ class LoadImagesAndVideos:
         frames (int): Total number of frames in the video.
         count (int): Counter for iteration, initialized at 0 during __iter__().
         ni (int): Number of images.
+        cv2_flag (int): OpenCV flag for image reading (grayscale or RGB).
 
     Methods:
         __init__: Initialize the LoadImagesAndVideos object.
@@ -320,7 +321,7 @@ class LoadImagesAndVideos:
         - Can read from a text file containing paths to images and videos.
     """
 
-    def __init__(self, path, batch=1, vid_stride=1):
+    def __init__(self, path, batch=1, vid_stride=1, channels=3):
         """Initialize dataloader for images and videos, supporting various input formats."""
         parent = None
         if isinstance(path, str) and Path(path).suffix == ".txt":  # *.txt file with img/vid/dir on each line
@@ -357,6 +358,7 @@ class LoadImagesAndVideos:
         self.mode = "video" if ni == 0 else "image"  # default to video if no images
         self.vid_stride = vid_stride  # video frame-rate stride
         self.bs = batch
+        self.cv2_flag = cv2.IMREAD_GRAYSCALE if channels == 1 else cv2.IMREAD_COLOR  # grayscale or RGB
         if any(videos):
             self._new_video(videos[0])  # new video
         else:
@@ -421,9 +423,9 @@ class LoadImagesAndVideos:
                     with Image.open(path) as img:
                         im0 = cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR)  # convert image to BGR nparray
                 else:
-                    im0 = imread(path)  # BGR
+                    im0 = imread(path, flags=self.cv2_flag)  # BGR
                 if im0 is None:
-                    LOGGER.warning(f"WARNING ⚠️ Image Read Error {path}")
+                    LOGGER.warning(f"Image Read Error {path}")
                 else:
                     paths.append(path)
                     imgs.append(im0)
@@ -475,24 +477,25 @@ class LoadPilAndNumpy:
         Loaded 2 images
     """
 
-    def __init__(self, im0):
+    def __init__(self, im0, channels=3):
         """Initializes a loader for PIL and Numpy images, converting inputs to a standardized format."""
         if not isinstance(im0, list):
             im0 = [im0]
         # use `image{i}.jpg` when Image.filename returns an empty path.
         self.paths = [getattr(im, "filename", "") or f"image{i}.jpg" for i, im in enumerate(im0)]
-        self.im0 = [self._single_check(im) for im in im0]
+        pil_flag = "L" if channels == 1 else "RGB"  # grayscale or RGB
+        self.im0 = [self._single_check(im, pil_flag) for im in im0]
         self.mode = "image"
         self.bs = len(self.im0)
 
     @staticmethod
-    def _single_check(im):
+    def _single_check(im, flag="RGB"):
         """Validate and format an image to numpy array, ensuring RGB order and contiguous memory."""
         assert isinstance(im, (Image.Image, np.ndarray)), f"Expected PIL/np.ndarray image type, but got {type(im)}"
         if isinstance(im, Image.Image):
-            if im.mode != "RGB":
-                im = im.convert("RGB")
-            im = np.asarray(im)[:, :, ::-1]
+            im = np.asarray(im.convert(flag))
+            # adding new axis if it's grayscale, and converting to BGR if it's RGB
+            im = im[..., None] if flag == "L" else im[..., ::-1]
             im = np.ascontiguousarray(im)  # contiguous
         return im
 
@@ -548,7 +551,7 @@ class LoadTensor:
     def _single_check(im, stride=32):
         """Validates and formats a single image tensor, ensuring correct shape and normalization."""
         s = (
-            f"WARNING ⚠️ torch.Tensor inputs should be BCHW i.e. shape(1, 3, 640, 640) "
+            f"torch.Tensor inputs should be BCHW i.e. shape(1, 3, 640, 640) "
             f"divisible by stride {stride}. Input shape{tuple(im.shape)} is incompatible."
         )
         if len(im.shape) != 4:
@@ -560,8 +563,7 @@ class LoadTensor:
             raise ValueError(s)
         if im.max() > 1.0 + torch.finfo(im.dtype).eps:  # torch.float32 eps is 1.2e-07
             LOGGER.warning(
-                f"WARNING ⚠️ torch.Tensor inputs should be normalized 0.0-1.0 but max value is {im.max()}. "
-                f"Dividing input by 255."
+                f"torch.Tensor inputs should be normalized 0.0-1.0 but max value is {im.max()}. Dividing input by 255."
             )
             im = im.float() / 255.0
 
@@ -589,7 +591,7 @@ def autocast_list(source):
     files = []
     for im in source:
         if isinstance(im, (str, Path)):  # filename or uri
-            files.append(Image.open(requests.get(im, stream=True).raw if str(im).startswith("http") else im))
+            files.append(Image.open(urllib.request.urlopen(im) if str(im).startswith("http") else im))
         elif isinstance(im, (Image.Image, np.ndarray)):  # PIL or np Image
             files.append(im)
         else:
