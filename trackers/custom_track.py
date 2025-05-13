@@ -66,7 +66,7 @@ class CustomTracker:
             # memory = torch.cuda.memory_reserved()
             free_mem, total_mem = cuda.mem_get_info()
             memory = total_mem - free_mem
-            return memory
+            return memory/1e9
         elif self.predictor.device.type == 'mps':
             memory = torch.mps.driver_allocated_memory()
         else:
