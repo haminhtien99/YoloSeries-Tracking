@@ -179,7 +179,7 @@ def track(
 def main(cfg):
     if cfg.all_weights:
         all_models = os.listdir(os.path.join(cfg.detectors_path,
-                                             cfg.sub_path, cfg.sub_path))
+                                             cfg.sub_path))
     else:
         all_models = [cfg.model_name]
 
@@ -191,7 +191,7 @@ def main(cfg):
         else:
             weight = 'best.pt'
         model_path = os.path.join(cfg.detectors_path,
-                                  cfg.sub_path, cfg.sub_path,
+                                  cfg.sub_path,
                                   model_name, 'weights', weight)
         if not os.path.exists(model_path):
             try:

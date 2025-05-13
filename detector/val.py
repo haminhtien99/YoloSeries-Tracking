@@ -1,9 +1,34 @@
-from ultralytics.models import YOLO
 import argparse
 import os
 import numpy as np
+import sys
 import csv
-os.environ['YOLO_VERBOSE'] = 'False'
+
+import warnings
+from contextlib import contextmanager
+from ultralytics.utils import LOGGER
+from ultralytics.models import YOLO
+
+# ignore warning
+warnings.filterwarnings('ignore')
+
+# disable verbose output YOLO
+LOGGER.setLevel('ERROR')
+
+@contextmanager
+def suppress_output():
+    with open(os.devnull, 'w') as devnull:
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = devnull
+        sys.stderr = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+
+
 def val_per_version(model_name: str,
                     model_path: str,
                     project: str,
@@ -13,15 +38,18 @@ def val_per_version(model_name: str,
     """ validation per version """
     model = YOLO(model=model_path)
     metrics = {}
-    results = model.val(
-        data=data,
-        imgsz=imgsz,
-        device=device,
-        project=project,
-        name=model_name,
-        verbose=False,
-        batch=1
-    )
+
+    # Suppress stdout during model.val()
+    with suppress_output():
+        results = model.val(
+            data=data,
+            imgsz=imgsz,
+            device=device,
+            project=project,
+            name=model_name,
+            verbose=False,
+        )
+
     metrics['name'] = model_name
     time = results.speed['inference'] + results.speed['postprocess']
     metrics['time(ms)'] = round(time, 1)
@@ -46,16 +74,27 @@ def main(args):
         os.makedirs(project)
         print(f'Validation folder {project} created')
     if args.all_weights:
-        all_models = os.listdir(os.path.join(args.detectors_path,
-                                             args.sub_path, args.sub_path,))
+        all_models = os.listdir(os.path.join(args.detectors_path, args.sub_path))
     else:
         all_models = [args.model_name]
-
+    print(f"{'Model':>12}{'Speed':>12}{'FPS':>12}{'mAP@50':>12}{'mAP@50-95':>12}")
     for yolo_name in all_models:
-        print(f'Model name: {yolo_name}')
-        model_path = os.path.join(args.detectors_path,
-                                    args.sub_path, args.sub_path,
-                                    yolo_name, 'weights', 'best.pt')
+        if args.format == 'engine':
+            weight = 'best.engine'
+        elif args.format == 'onnx':
+            weight = 'best.onnx'
+        else:
+            weight = 'best.pt'
+
+        model_path = os.path.join(
+            args.detectors_path,
+            args.sub_path,
+            yolo_name, 'weights',
+            weight
+        )
+        if not os.path.exists(model_path):
+            print(f"[WARNING] Model file not found: {model_path}")
+            continue
         metrics = val_per_version(
             model_name=yolo_name,
             model_path=model_path,
@@ -64,7 +103,9 @@ def main(args):
             imgsz=args.imgsz,
             device=args.device
         )
+        print(f"{yolo_name:>12}{metrics['time(ms)']:>10.1f}ms{metrics['FPS']:>12}{metrics['mAP50']:>12.3f}{metrics['mAP50-95']:>12.3f}")
         results_list.append(metrics)
+
     if args.save:
         with open(os.path.join(project, 'results.csv'), 'w') as f:
             writer = csv.DictWriter(f, fieldnames=results_list[0].keys())
@@ -91,6 +132,7 @@ if __name__ == '__main__':
     parser.add_argument('--save', action='store_true', help='Save result or not')
     parser.add_argument('--project', type=str, default='val_results',
                         help='path to save project files and results')
+    parser.add_argument('--format', type=str, default='pytorch', help='pytorch, onnx or engine')
     args = parser.parse_args()
     print(f'validation dataset: {args.data}')
     print(f'detectors folder: {args.detectors_path}')
@@ -101,4 +143,5 @@ if __name__ == '__main__':
     print(f'device: {args.device}')
     if args.save:
         print(f'output folder: {args.project}')
+    print(f'Format {args.format}')
     main(args)
