@@ -1,5 +1,4 @@
 import torch
-import cv2
 import numpy as np
 import tensorrt as trt
 from collections import OrderedDict, namedtuple
