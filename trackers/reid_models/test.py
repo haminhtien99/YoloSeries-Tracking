@@ -17,8 +17,9 @@ def compute_features(model, test_loader, num_query, dtype=torch.float32):
     obj_ids = torch.tensor([]).int().to(device)
 
     start = time.time()
+    pbar = tqdm(test_loader, desc=f"{'Inference':>15}{'Rank@1':>15}{'Rank@5':>15}{'Rank@10':>15}{'mAP':>15}")
     with torch.no_grad():
-        for (imgs_batch, cam_ids_batch, pids_batch) in tqdm(test_loader, desc='compute features'):
+        for (imgs_batch, cam_ids_batch, pids_batch) in pbar:
             imgs_batch = imgs_batch.to(device).to(dtype)
             cam_ids_batch = cam_ids_batch.to(device)
             pids_batch = pids_batch.to(device)
@@ -28,7 +29,6 @@ def compute_features(model, test_loader, num_query, dtype=torch.float32):
             camera_ids = torch.cat((camera_ids, cam_ids_batch), dim=0)
             obj_ids = torch.cat((obj_ids, pids_batch))
     inference_time = (time.time() - start)/ len(camera_ids) * 1000
-    print(f'{inference_time:.2f} ms per image')
     query_features = features[:num_query]
     query_camera_ids = camera_ids[:num_query]
     query_obj_ids = obj_ids[:num_query]
@@ -45,7 +45,7 @@ def compute_features(model, test_loader, num_query, dtype=torch.float32):
         "gl": gallery_obj_ids,
         "gc": gallery_camera_ids
     }
-    return features
+    return features, inference_time
 
 def main():
 
@@ -83,7 +83,6 @@ def main():
     print(f'Device: {device}')
 
     # dataloader
-    print('Load data ....')
     _, test_loader, num_query = dataloader(
         dir=data,
         image_shape=args.imgsz,
@@ -93,7 +92,6 @@ def main():
     )
 
 
-    print('Load checkpoint ....')
     assert os.path.isfile(ckpt), 'Checkpoint not found'
     format = ckpt.split('.')[-1]
 
@@ -110,7 +108,7 @@ def main():
     print(dtype)
 
     # compute features
-    features = compute_features(
+    features, inference = compute_features(
         model=net,
         test_loader=test_loader,
         num_query=num_query,
@@ -126,8 +124,7 @@ def main():
 
     # evaluate, optinally
     from evaluate import evaluate
-    print('Evaluate features....')
-    evaluate(features, metric_distance='cosine')
-
+    res = evaluate(features, metric_distance='cosine')
+    print(f"{inference:>13.1f}ms{res[0]:>15.1f}{res[1]:>15.1f}{res[2]:>15.1f}{res[3]:>15.1f}")
 if __name__ == "__main__":
     main()
