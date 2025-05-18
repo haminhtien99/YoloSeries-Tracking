@@ -284,12 +284,13 @@ def main(cfg):
             optimizer=optimizer,
             scheduler=scheduler,
             exp_path=exp_path,
-            resume=cfg.resume)
+            resume=cfg.resume,
+            early_stop=cfg.early_stop)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train ReID vehicle')
     parser.add_argument('--cfg', type=str, default='resnet18.yaml',
-                        help='configuration file in conf/')
+                        help='configuration file in cfg/')
     args = parser.parse_args()
     cfg = load_yaml(args.cfg)
     main(cfg)
