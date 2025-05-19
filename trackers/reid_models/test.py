@@ -98,7 +98,7 @@ def main():
     if format in ['pth', 'pt']:
         net = load_model(model_path=ckpt, reid=True, feature_dim=args.feature_dim)
         dtype = torch.float16 if args.half else torch.float32
-        net.to(dtype)
+        net.to(device).to(dtype)
     elif format in ['engine', 'trt']:
         net = Engine(model_path=ckpt, device=device)
         dtype = torch.float16 if net.fp16 else torch.float32

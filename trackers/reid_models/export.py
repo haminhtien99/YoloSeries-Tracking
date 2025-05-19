@@ -86,10 +86,10 @@ class Exporter:
             raise RuntimeError(f'failed to load ONNX file: {input_onnx}')
         if self.dynamic:
             profile = builder.create_optimization_profile()
-
-            min_shape = (1, 3, 32, 32)
-            max_shape = (100, 3, 256, 256)
-            opt_shape = (32, 3, self.opt_size[0], self.opt_size[1])
+            h, w = self.opt_size
+            min_shape = (1, 3, h, w)
+            max_shape = (256, 3, h, w)
+            opt_shape = (128, 3, h, w)
             profile.set_shape('input', min=min_shape, opt=opt_shape, max=max_shape)
             config.add_optimization_profile(profile)
         if self.int8:

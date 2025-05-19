@@ -167,8 +167,7 @@ def evaluate(features, metric_distance='cosine', max_rank=50):
     Rank5 = cmc[4] * 100
     Rank10 = cmc[9] * 100
 
-    print(f'Rank@1: {Rank1:.1f}, Rank5: {Rank5:.1f}, Rank10: {Rank10:.1f}')
-    print(f'mAP: {mAP:.1f}, mINP: {mINP:.1f}')
+    return [Rank1, Rank5, Rank10, mAP]
 
 
 
