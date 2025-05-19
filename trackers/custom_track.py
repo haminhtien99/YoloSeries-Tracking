@@ -21,7 +21,7 @@ except Exception as e:
 
 
 
-TRACKER_MAP = {'sort': Sort, 'bytetrack': BYTETracker, 'botsort': BOTSORT,
+TRACKER_MAP = {'sort': Sort, 'bytetrack': BYTETracker, 'botsort': BOTSORT, 'botsort_reid': BOTSORT,
                'deepsort': DeepSort, 'ocsort': OCSort}
 
 class CustomTracker:
