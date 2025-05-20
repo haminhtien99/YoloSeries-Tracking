@@ -44,9 +44,9 @@ class CustomTracker:
         tracks = self.tracker.update(boxes, img[0])
         if len(tracks) == 0:
             results.memory = self._get_memory()
-            results.speed['matching'] = 0.0
+            results.speed['association'] = 0.0
             return results
-        matching_time = (time.time() - start) * 1000
+        association_time = (time.time() - start) * 1000
         idx = tracks[:, -1].astype(int)
         valid_indices = idx[idx > -1]   # hide unmatched track-id
         results = results[valid_indices]
@@ -54,7 +54,7 @@ class CustomTracker:
         update_args = {"boxes": torch.as_tensor(tracks[:, :-1])}
         results.update(**update_args)
         results.memory = self._get_memory()
-        results.speed['matching'] = matching_time
+        results.speed['association'] = association_time
         return results
 
     def reset(self):

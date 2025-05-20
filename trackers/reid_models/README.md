@@ -67,13 +67,12 @@ cd YoloSeries-Tracking/trackers/reid_models
 Prepare `cfg/config.yaml` like this:
 
 ```yaml
-train_batch_size: 64
-test_batch_size: 256
+train_batch_size: 128
 net: deepsort-reid   # name of model
 data_dir: /path/to/your/dataset/pytorch
 camera_id: False    # set True if training on VeRi dataset, False if training on VRU, CustomVehicle-ReID
 image_shape: [128, 64]  # image shape
-feature_dim: 128  # feature dimension
+feature_dim: 128  # output feature dimension
 device: 0
 resume: false
 epochs: 5
@@ -90,14 +89,18 @@ metric_loss: null # or 'triplet' - add TripletMarginLoss to compute loss functio
 
 ### 🏋️‍♂️ Train the Model
 
+Trick: For training on VRU dataset, triplet loss not really works, only need to use Cross-Entropy loss.
+
 ```bash
 python train.py --cfg path/to/config/file.yml
 ```
 
 ### 📊 Test and Evaluate
 
+Available test for pytorch weight or tensorrt weight
+
 ```bash
-python test.py --cfg path/to/config/file.yml
+python test.py --data path/to/folder/pytorch --ckpt path/to/reid/weight.pth
 ```
 
 ## 🔗 References
