@@ -12,12 +12,12 @@ def track_per_video(
         imgs: str,
         tracker: CustomTracker,
         track_folder: str|None,
-        track_txt: str|None
+        track_txt: str|None,
+        video_name: None|str =None
     ):
     """ tracking per video """
     avg_preprocess, avg_inference, avg_postprocess, avg_matching = 0., 0., 0., 0.
     dataset = LoadImagesAndVideos(path=imgs, batch=1)
-    print(f"{'GPU':>11}{'preprocess':>15}{'inference':>15}{'postprocess':>15}{'matching':>15}")
     pbar = tqdm(dataset)
     for i, batch in enumerate(pbar):
         results = tracker.update(batch)
@@ -32,8 +32,9 @@ def track_per_video(
         avg_matching += matching
 
         pbar.set_description(
-            ("%11s"*5)
+            ("%11s"*6)
             % (
+                f"{video_name:>20}",
                 f"{results.memory:>10.3g}G",
                 f"{preprocess:>13.2f}ms",
                 f"{inference:>13.2f}ms",
@@ -138,13 +139,13 @@ def track(
         else:
             videos = [video]
 
+        print(f"{'Video name':>20}{'GPU':>11}{'preprocess':>15}{'inference':>15}{'postprocess':>15}{'matching':>15}")
+
         for vid in videos:
-            print(f'{spl_set}/{vid}')
             if save_img:
                 track_folder = os.path.join('results', benchmark, f'{benchmark}-{spl}',
                                             f'{track_name}-{model_name}-train-{sub_path}',
                                             video)
-                print(f'save to {track_folder}')
             else: track_folder = None
 
             if save_txt:
@@ -168,12 +169,11 @@ def track(
                 imgs=os.path.join(mot_path, spl_set, vid, 'img1'),
                 tracker=tracker,
                 track_folder=track_folder,
-                track_txt=track_txt
+                track_txt=track_txt,
+                video_name=vid
             )
             for key in res.keys():
                 times[key].append(res[key])
-        if save_txt:
-            print(f'saved text to{full_output_path}')
     return times
 
 def main(cfg):
@@ -209,7 +209,7 @@ def main(cfg):
         time2 = sum(times['inference'])/number_vid
         time3 = sum(times['postprocess'])/number_vid
         time4 = sum(times['matching'])/number_vid
-        print(f"{'Average':<11}{time1:13.2f}ms{time2:13.2f}ms{time3:13.2f}ms{time4:13.2f}ms")
+        print(f"{'Average':<31}{time1:13.2f}ms{time2:13.2f}ms{time3:13.2f}ms{time4:13.2f}ms")
 
 if __name__ == '__main__':
     from tools.load_yaml import load_yaml

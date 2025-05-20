@@ -51,8 +51,8 @@ def val_per_version(model_name: str,
         )
 
     metrics['name'] = model_name
-    time = results.speed['inference'] + results.speed['postprocess']
-    metrics['time(ms)'] = round(time, 1)
+    time = results.speed['inference']
+    metrics['Inference(ms)'] = round(time, 1)
     metrics['FPS'] = int(1000/time)
     metrics['mAP50'] = np.around(results.box.map50, 3)
     metrics['mAP75'] = np.around(results.box.map75, 3)
@@ -77,7 +77,7 @@ def main(args):
         all_models = os.listdir(os.path.join(args.detectors_path, args.sub_path))
     else:
         all_models = [args.model_name]
-    print(f"{'Model':>12}{'Speed':>12}{'FPS':>12}{'mAP@50':>12}{'mAP@50-95':>12}")
+    print(f"{'Model':>12}{'Inference':>12}{'FPS':>12}{'mAP@50':>12}{'mAP@50-95':>12}")
     for yolo_name in all_models:
         if args.format == 'engine':
             weight = 'best.engine'
@@ -103,7 +103,7 @@ def main(args):
             imgsz=args.imgsz,
             device=args.device
         )
-        print(f"{yolo_name:>12}{metrics['time(ms)']:>10.1f}ms{metrics['FPS']:>12}{metrics['mAP50']:>12.3f}{metrics['mAP50-95']:>12.3f}")
+        print(f"{yolo_name:>12}{metrics['Inference(ms)']:>10.1f}ms{metrics['FPS']:>12}{metrics['mAP50']:>12.3f}{metrics['mAP50-95']:>12.3f}")
         results_list.append(metrics)
 
     if args.save:
