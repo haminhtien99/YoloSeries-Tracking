@@ -130,7 +130,8 @@ def track(
     splits_set = [i for i in os.listdir(mot_path) if not i.startswith('README')]
     track_name = tracker_cfg.split('.')[0]
     print(model_name, track_name)
-    times = {'preprocess': [], 'inference': [], 'postprocess': [], 'association': []}
+    times = {'preprocess': 0., 'inference': 0., 'postprocess': 0., 'association': 0.}
+    num_videos = 0
     for spl in splits:
         spl_set = splits_set[0] if spl in splits_set[0] else splits_set[1]
         if video is None:
@@ -142,6 +143,7 @@ def track(
         print(f"{'Video name':>20}{'GPU':>11}{'preprocess':>15}{'inference':>15}{'postprocess':>15}{'association':>15}")
 
         for vid in videos:
+            num_videos += 1
             if save_img:
                 track_folder = os.path.join('results', benchmark, f'{benchmark}-{spl}',
                                             f'{track_name}-{model_name}-train-{sub_path}',
@@ -173,7 +175,17 @@ def track(
                 video_name=vid
             )
             for key in res.keys():
-                times[key].append(res[key])
+                times[key]+=(res[key])
+
+    for key in times.keys():
+        times[key]/=num_videos
+    # save times
+    if save_txt:
+        output_file = os.path.join(os.path.dirname(full_output_path), 'output_time.txt')
+        with open(output_file, 'w') as f:
+            line1 = ','.join([key for key in times.keys()]) + '\n'
+            line2 = ','.join([f"{value:.2f}" for value in times.values()]) + '\n'
+            f.writelines([line1, line2])
     return times
 
 def main(cfg):
@@ -204,12 +216,8 @@ def main(cfg):
         cfg.model_name = model_name
         times = track(model_path=model_path, **vars(cfg))
 
-        number_vid = len(times['preprocess'])
-        time1 = sum(times['preprocess'])/number_vid
-        time2 = sum(times['inference'])/number_vid
-        time3 = sum(times['postprocess'])/number_vid
-        time4 = sum(times['association'])/number_vid
-        print(f"{'Average':<31}{time1:13.2f}ms{time2:13.2f}ms{time3:13.2f}ms{time4:13.2f}ms")
+        print(f"{'Average':<31}{times['preprocess']:13.2f}ms{times['inference']:13.2f}ms{times['postprocess']:13.2f}ms{times['association']:13.2f}ms")
+
 
 if __name__ == '__main__':
     from tools.load_yaml import load_yaml
