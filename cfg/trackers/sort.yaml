@@ -2,5 +2,5 @@ tracker_type: sort # tracker type
 iou_threshold: 0.2 # IOU threshold for matching detections to trackers
 min_hits: 2 # Minimum number of detections before a tracker is considered valid
 max_age: 5 # Maximum number of frames to keep a tracker alive without detection
-min_score: 0.25 # Minimum threshold confience for matching detections to trackers
+min_score: 0.4 # Minimum threshold confience for matching detections to trackers
 max_bbox_overlap: 0.9 # Maximum overlap between two bounding boxes to consider them as the same object

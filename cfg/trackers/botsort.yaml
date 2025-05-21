@@ -5,9 +5,9 @@
 # For BoT-SORT source code see https://github.com/NirAharon/BoT-SORT
 
 tracker_type: botsort # tracker type, ['botsort', 'bytetrack']
-track_high_thresh: 0.25 # threshold for the first association
-track_low_thresh: 0.1 # threshold for the second association
-new_track_thresh: 0.25 # threshold for init new track if the detection does not match any tracks
+track_high_thresh: 0.4 # threshold for the first association
+track_low_thresh: 0.25 # threshold for the second association
+new_track_thresh: 0.4 # threshold for init new track if the detection does not match any tracks
 track_buffer: 30 # buffer to calculate the time when to remove tracks
 match_thresh: 0.8 # threshold for matching tracks
 fuse_score: True # Whether to fuse confidence scores with the iou distances before matching
@@ -15,10 +15,10 @@ fuse_score: True # Whether to fuse confidence scores with the iou distances befo
 
 # BoT-SORT settings
 gmc_method: sparseOptFlow # method of global motion compensation
-# ReID model related thresh (not supported yet)
+# ReID model related thresh
 proximity_thresh: 0.5
 appearance_thresh: 0.25
-with_reid: True
-model_path: trackers/reid_models/weights_pth/deepsort_reid.pth # Path to the reid checkpoint
-device: cpu
-imgsz: [128,64] # Size of the input image reid model
+with_reid: False
+model_path: None # Path to the reid checkpoint
+device: None
+imgsz: None # Size of the input image reid model

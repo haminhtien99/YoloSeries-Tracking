@@ -1,7 +1,7 @@
 
 tracker_type: ocsort # tracker type
-track_high_thresh: 0.25 # threshold for the first association
-track_low_thresh: 0.1 # threshold for the second association
+track_high_thresh: 0.4 # threshold for the first association
+track_low_thresh: 0.25 # threshold for the second association
 max_age: 30
 min_hits: 3
 iou_threshold: 0.3

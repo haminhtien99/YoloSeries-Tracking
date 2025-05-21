@@ -3,7 +3,7 @@ n_init: 3 # Minimum number of detections before a tracker is considered valid
 max_age: 70 # Maximum number of frames to keep a tracker alive without detection
 nn_budget: 100 # Maximum number of objects to keep in memory
 max_dist: 0.2  # Maximum distance between features to consider them as the same object
-min_confidence: 0.25 # Minimum confidence
+min_confidence: 0.4 # Minimum confidence
 max_iou_distance: 0.7 # Maximum IOU distance
 model_path: trackers/reid_models/weights_onnx/resnet18.onnx # Path to the reid checkpoint
 device: cpu
