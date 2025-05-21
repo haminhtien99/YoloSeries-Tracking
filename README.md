@@ -211,7 +211,7 @@ results/
 Run eval
 ```bash
 python eval.py \
-  --GT-FOLDER results/data/gt/VisDrone \
+  --GT_FOLDER results/data/gt/VisDrone \
   --TRACKERS_FOLDER results/data/trackers/VisDrone \
   --TRACKERS_TO_EVAL deepsort \
   --SEQ_INFO uav0000117_02622_v
