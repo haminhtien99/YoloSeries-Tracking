@@ -16,11 +16,34 @@ This repository contains the code for the YOLO detectors and the Multi-object tr
 - DeepSORT
 - OC-SORT
 
-### Key Tools & Resources::
+|Algorithm        |Association time &uarr; (ms)|
+|-----------------|----------------------------|
+|SORT             | 4.5                        |
+|DeepSORT(*)      | 24.4(**)                   |
+|OC-SORT          | 6.5                        |
+|ByteTrack        | 3.5                        |
+|BoT-SORT         | 51.0                       |
+|BoT-SORT-ReID(*) | 68.6(**)                   |
+
+(*) : ReID model - OSNET_x0_25 with input size 128x128 and output dimension feature 128
+
+(**): Run on on Tesla T4 with TensorRT FP16
+### Key Tools & Resources:
 - Detectors from [ultralytics](https://github.com/ultralytics/ultralytics)
 - Evaluation Tracking [TrackEval](https://github.com/JonathonLuiten/TrackEval)
 - Track algorithms: [SORT](https://github.com/abewley/sort), [DeepSORT](https://github.com/nwojke/deep_sort). [OC-SORT](https://github.com/noahcao/OC_SORT), [ByteTrack](https://github.com/ifzhang/ByteTrack), [BoT-SORT](https://github.com/NirAharon/BoT-SORT).
 
+### Results
+Track results in VisDrone-MOT-val with detector YOLO11x, run on Tesla T4 with TensorRT FP16
+
+|Algorithm        |FPS &uarr;|HOTA &uarr;|MOTA &uarr;|IDF1 &uarr;|GPU (GB)|
+|-----------------|----------|-----------|-----------|-----------|--------|
+|SORT             | 42       |51.67      |48.09      |62.05      |0.605   |
+|OC-SORT          | 46       |51.78      |48.67      |61.77      |0.605   |
+|ByteTrack        | 56       |51.63      |44.92      |62.87      |0.605   |
+|BoT-SORT         | 13       |57.25      |47.16      |70.78      |0.605   |
+|BoT-SORT-ReID    | 11       |57.28      |47.13      |70.92      |0.739   |
+|DeepSORT         | 22       |49.17      |48.55      |58.60      |0.739   |
 ## 🔧 Installation
 
 ```
@@ -64,27 +87,20 @@ dataset_mot/
 
 ```
 `gt.txt` format:
-```
-<frame>,<id>,<x>,<y>,<w>,<h>,<conf>,<class_id>,<x3D>,<y3D>,<z3D>
------------------------------------------------------------------------------------------------------------------------------------
-Name	                                      Description
------------------------------------------------------------------------------------------------------------------------------------
-<frame>	                The frame index of the video frame
+| Field         | Description                                                                 |
+|---------------|-----------------------------------------------------------------------------|
+| `<frame>`     | The frame index of the video frame                                          |
+| `<id>`        | The identity of the target                                                  |
+| `<x>`         | The x coordinate of the top-left corner of the predicted bounding box       |
+| `<y>`         | The y coordinate of the top-left corner of the predicted object bounding box|
+| `<w>`         | The width in pixels of the predicted object bounding box                    |
+| `<h>`         | The height in pixels of the predicted object bounding box                   |
+| `<conf>`      | The confidence of the predicted bounding box, set to 1                      |
+| `<class_id>`  | The class ID of the predicted object (not described above, inferred field)  |
+| `<x3D>`       | The x coordinate in 3D space, set to -1                                     |
+| `<y3D>`       | The y coordinate in 3D space, set to -1                                     |
+| `<z3D>`       | The z coordinate in 3D space, set to -1                                     |
 
-<id>	                  The identity of the target
-
-<x>                     The x coordinate of the top-left corner of the predicted bounding box
-
-<y>	                    The y coordinate of the top-left corner of the predicted object bounding box
-
-<w>                     The width in pixels of the predicted object bounding box
-
-<h>	                    The height in pixels of the predicted object bounding box
-
-<conf>	                The confidence of the predicted bounding box, set to 1
-
-<x3D>,<y3D>,<z3D>       The coordinates in 3D space, set to -1, -1, -1                     
-```
 file seqinfo.ini looks as follows:
 ```
 [Sequence]
