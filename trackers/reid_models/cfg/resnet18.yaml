@@ -1,9 +1,8 @@
-train_batch_size: 64
-test_batch_size: 256
+train_batch_size: 128
+data_dir: /VRU/pytorch
 net: resnet18
-feature_dim: 128
-data_dir: /home/ha/Downloads/Dataset/VeRi/pytorch
 image_shape: [128, 128]
+feature_dim: 128
 device: cpu
 resume: false
 epochs: 3

@@ -82,7 +82,7 @@ lr: 0.0003
 scheduler: cosine
 optim: Adam
 pretrained_weight: null
-pretrained: False
+pretrained: False # True if training osnet
 metric_loss: null # or 'triplet' - add TripletMarginLoss to compute loss function
 
 ```
